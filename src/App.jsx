@@ -239,7 +239,7 @@ function HomeScreen({ userLoc, setScreen, t, onSOS, volunteers, sosCountToday })
 // ─── VOLUNTEERS ───
 function VolunteersScreen({ userLoc, setScreen, setSelectedVol, volunteers }) {
   const [filter, setFilter] = useState("all");
-  const withDist = volunteers.filter(v => v.approved).map(v => ({ ...v, distance: userLoc && v.lat && v.lng ? haversineMeters(userLoc.lat, userLoc.lng, v.lat, v.lng) : 500 })).filter(v => v.distance <= CAMPUS_RADIUS_KM * 1000);
+  const withDist = volunteers.filter(v => v.approved).map(v => ({ ...v, distance: userLoc && v.lat && v.lng ? haversineMeters(userLoc.lat, userLoc.lng, parseFloat(v.lat), parseFloat(v.lng)) : 9999 })).filter(v => v.distance <= CAMPUS_RADIUS_KM * 1000);
   const displayed = withDist.filter(v => filter === "available" ? (v.availability && v.online) : filter === "certified" ? v.first_aid_certified : true).sort((a, b) => a.distance - b.distance);
   function callVol(vol) { window.location.href = `tel:${vol.phone}`; sendVolunteerAlert(vol, "call", { userLoc }); playEmergencySound("call"); }
   function viewMap(vol) { sendVolunteerAlert(vol, "map", { userLoc }); playEmergencySound("map"); setSelectedVol(vol); setScreen("map"); }
@@ -292,4 +292,4 @@ function MapScreen({ userLoc, selectedVol, setScreen }) {
       <div style={S.sHead}>🗺 Volunteer Location</div>
       <div style={{ ...S.card, marginBottom: 16 }}>
         <div style={S.row}>
-          <div style={{ width: 40, height: 40, borderRadius: "50%", background: C.gold, display:
+          <div style={{ width: 40, height: 40, borderRadius: "50%", back
