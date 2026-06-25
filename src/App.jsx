@@ -643,7 +643,16 @@ export default function EmergencyApp() {
   }), []);
 
   function enableLocation() {
-    setTimeout(() => { setUserLoc({ lat: CAMPUS_CENTER.lat, lng: CAMPUS_CENTER.lng }); setLocationEnabled(true); }, 400);
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => { setUserLoc({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setLocationEnabled(true); },
+        () => { setUserLoc({ lat: CAMPUS_CENTER.lat, lng: CAMPUS_CENTER.lng }); setLocationEnabled(true); },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    } else {
+      setUserLoc({ lat: CAMPUS_CENTER.lat, lng: CAMPUS_CENTER.lng });
+      setLocationEnabled(true);
+    }
   }
 
   function triggerSOS() {
