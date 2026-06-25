@@ -292,4 +292,419 @@ function MapScreen({ userLoc, selectedVol, setScreen }) {
       <div style={S.sHead}>🗺 Volunteer Location</div>
       <div style={{ ...S.card, marginBottom: 16 }}>
         <div style={S.row}>
-          <div style={{ width: 40, height: 40, borderRadius: "50%", back
+          <div style={{ width: 40, height: 40, borderRadius: "50%", background: C.gold, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 15, color: C.navy }}>{vol.name.charAt(0)}</div>
+          <div><p style={{ fontSize: 15, fontWeight: 700, color: C.white, margin: 0 }}>{vol.name}</p><p style={{ fontSize: 12, color: C.gray, margin: "2px 0 0" }}>{vol.department || vol.occupation}</p></div>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+        <div style={{ ...S.card, flex: 1, textAlign: "center", marginBottom: 0 }}><p style={{ fontSize: 20, margin: "0 0 4px" }}>📍</p><p style={{ color: C.gold, fontWeight: 800, fontSize: 18, margin: 0 }}>{Math.round(exactDist)}m</p><p style={{ color: C.gray, fontSize: 11, margin: 0 }}>Distance</p></div>
+        <div style={{ ...S.card, flex: 1, textAlign: "center", marginBottom: 0 }}><p style={{ fontSize: 20, margin: "0 0 4px" }}>🚶</p><p style={{ color: C.gold, fontWeight: 800, fontSize: 18, margin: 0 }}>~{walkMin} min</p><p style={{ color: C.gray, fontSize: 11, margin: 0 }}>Walk Time</p></div>
+      </div>
+      <div style={{ background: C.navyLight, borderRadius: 12, height: 200, marginBottom: 12, position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", inset: 0, backgroundImage: "radial-gradient(circle, rgba(212,160,23,0.15) 1px, transparent 1px)", backgroundSize: "16px 16px" }} />
+        {[1, 2, 3].map(r => <div key={r} style={{ position: "absolute", top: "50%", left: "50%", width: r * 56, height: r * 56, marginLeft: -(r * 28), marginTop: -(r * 28), border: `1px solid rgba(148,163,184,${0.35 - r * 0.08})`, borderRadius: "50%" }} />)}
+        <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", textAlign: "center" }}>
+          <div style={{ width: 14, height: 14, borderRadius: "50%", background: C.blue, border: `2px solid ${C.white}`, margin: "0 auto" }} /><p style={{ fontSize: 10, color: C.gray, margin: "4px 0 0" }}>You</p>
+        </div>
+        <div style={{ position: "absolute", top: "50%", left: "50%", transform: `rotate(${deg}deg) translateY(-78px) rotate(${-deg}deg) translate(-50%,-50%)`, textAlign: "center" }}>
+          <div style={{ width: 16, height: 16, borderRadius: "50%", background: C.gold, border: `2px solid ${C.navy}`, margin: "0 auto", boxShadow: "0 0 8px rgba(212,160,23,0.8)" }} />
+          <p style={{ fontSize: 10, color: C.gold, fontWeight: 700, margin: "4px 0 0", whiteSpace: "nowrap" }}>{vol.name.split(" ")[0]}</p>
+        </div>
+      </div>
+      <button style={{ ...S.btn, ...S.btnGold }} onClick={() => window.open(osmUrl, "_blank")}>🧭 Navigate to Volunteer</button>
+      <button style={{ ...S.btn, ...S.btnRed }} onClick={() => window.open(`tel:${vol.phone}`, "_self")}>📞 Call {vol.name.split(" ")[0]}</button>
+    </div>
+  );
+}
+
+// ─── CAMPUS MAP ───
+function CampusMapScreen({ setScreen }) {
+  const bbox = `${CAMPUS_CENTER.lng - 0.006},${CAMPUS_CENTER.lat - 0.004},${CAMPUS_CENTER.lng + 0.006},${CAMPUS_CENTER.lat + 0.004}`;
+  return (
+    <div style={S.screen}>
+      <button style={{ ...S.btnSm, ...S.btnNavy, marginBottom: 16, width: "auto" }} onClick={() => setScreen("home")}>← Back</button>
+      <div style={S.sHead}>🗺️ Campus Map</div>
+      <div style={{ borderRadius: 12, overflow: "hidden", marginBottom: 16, border: `1px solid ${C.navyLight}` }}>
+        <iframe title="campus-map" width="100%" height="240" style={{ border: 0 }} src={`https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${CAMPUS_CENTER.lat},${CAMPUS_CENTER.lng}`} />
+      </div>
+      <div style={S.sHead}>📍 Key Locations</div>
+      {CAMPUS_LANDMARKS.map(loc => (
+        <div key={loc.name} style={{ ...S.card, display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ fontSize: 24 }}>{loc.icon}</span>
+          <div><p style={{ fontSize: 14, fontWeight: 700, color: C.white, margin: 0 }}>{loc.name}</p><p style={{ fontSize: 11, color: C.gray, margin: "2px 0 0" }}>{loc.lat.toFixed(4)}, {loc.lng.toFixed(4)}</p></div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── CONTACTS ───
+function ContactsScreen({ canEdit = false }) {
+  const [contacts, setContacts] = useState(() => { try { const r = localStorage.getItem("emergency_contacts"); return r ? JSON.parse(r) : DEFAULT_CONTACTS; } catch { return DEFAULT_CONTACTS; } });
+  const [editingKey, setEditingKey] = useState(null);
+  const [editIcon, setEditIcon] = useState(""); const [editLabel, setEditLabel] = useState(""); const [editNumber, setEditNumber] = useState(""); const [editDesc, setEditDesc] = useState(""); const [adding, setAdding] = useState(false);
+  function persist(next) { setContacts(next); try { localStorage.setItem("emergency_contacts", JSON.stringify(next)); } catch {} }
+  function startEdit(c) { setEditingKey(c.key); setEditIcon(c.icon); setEditLabel(c.label); setEditNumber(c.number); setEditDesc(c.desc); setAdding(false); }
+  function startAdd() { setEditingKey("__new__"); setEditIcon("📞"); setEditLabel(""); setEditNumber(""); setEditDesc(""); setAdding(true); }
+  function saveEdit() {
+    if (!editLabel.trim() || !editNumber.trim()) return;
+    if (adding) persist([...contacts, { key: `custom-${Date.now()}`, icon: editIcon || "📞", label: editLabel, number: editNumber, desc: editDesc }]);
+    else persist(contacts.map(c => c.key === editingKey ? { ...c, icon: editIcon, label: editLabel, number: editNumber, desc: editDesc } : c));
+    setEditingKey(null);
+  }
+  function deleteContact(key) { if (window.confirm("Remove this contact?")) persist(contacts.filter(c => c.key !== key)); }
+  return (
+    <div style={S.screen}>
+      <div style={S.sHead}>📞 Emergency Contacts</div>
+      {contacts.map(c => (
+        <div key={c.key} style={{ background: C.red, borderRadius: 12, padding: "14px 16px", marginBottom: 10, display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ fontSize: 26, cursor: "pointer" }} onClick={() => window.open(`tel:${c.number}`, "_self")}>{c.icon}</span>
+          <div style={{ flex: 1, cursor: "pointer" }} onClick={() => window.open(`tel:${c.number}`, "_self")}>
+            <p style={{ fontSize: 16, fontWeight: 700, color: C.white, margin: 0 }}>{c.label}</p>
+            <p style={{ fontSize: 12, color: "#fecaca", margin: 0 }}>{c.desc}</p>
+          </div>
+          <div style={{ textAlign: "right", cursor: "pointer" }} onClick={() => window.open(`tel:${c.number}`, "_self")}>
+            <p style={{ fontSize: 14, color: "#fecaca", fontWeight: 800, margin: 0 }}>{c.number}</p>
+            <p style={{ fontSize: 10, color: "#fca5a5", margin: 0 }}>Tap to call</p>
+          </div>
+          {canEdit && (
+            <div style={{ display: "flex", gap: 4 }}>
+              <button style={{ background: "rgba(0,0,0,0.25)", border: "none", borderRadius: 8, padding: 6, cursor: "pointer", color: C.white, fontSize: 13 }} onClick={() => startEdit(c)}>✏️</button>
+              <button style={{ background: "rgba(0,0,0,0.25)", border: "none", borderRadius: 8, padding: 6, cursor: "pointer", color: C.white, fontSize: 13 }} onClick={() => deleteContact(c.key)}>🗑️</button>
+            </div>
+          )}
+        </div>
+      ))}
+      {canEdit && <button style={{ ...S.btn, ...S.btnNavy }} onClick={startAdd}>➕ Add Emergency Contact</button>}
+      {canEdit && editingKey && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 24 }}>
+          <div style={{ background: C.navyMid, borderRadius: 14, padding: 20, width: "100%", maxWidth: 340 }}>
+            <p style={{ color: C.white, fontWeight: 700, fontSize: 15, marginBottom: 14 }}>{adding ? "Add Contact" : "Edit Contact"}</p>
+            <p style={S.label}>Icon</p><input style={S.input} value={editIcon} onChange={e => setEditIcon(e.target.value)} />
+            <p style={S.label}>Label</p><input style={S.input} value={editLabel} onChange={e => setEditLabel(e.target.value)} />
+            <p style={S.label}>Phone</p><input style={S.input} value={editNumber} onChange={e => setEditNumber(e.target.value)} />
+            <p style={S.label}>Description</p><input style={S.input} value={editDesc} onChange={e => setEditDesc(e.target.value)} />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={{ ...S.btn, ...S.btnNavy, marginBottom: 0, flex: 1 }} onClick={() => setEditingKey(null)}>Cancel</button>
+              <button style={{ ...S.btn, ...S.btnGold, marginBottom: 0, flex: 1 }} onClick={saveEdit}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── LOGIN ───
+function LoginScreen({ onLoggedIn, setScreen, t }) {
+  const [email, setEmail] = useState(""); const [error, setError] = useState("");
+  function handleLogin() {
+    const trimmed = email.trim().toLowerCase();
+    if (!trimmed.includes("@") || !trimmed.includes(".")) { setError("Please enter a valid college email ID."); return; }
+    const existing = getSession();
+    const profile = (existing && existing.email === trimmed) ? existing : { email: trimmed, registered: false, name: "", approved: false };
+    saveSession(profile); onLoggedIn(profile);
+  }
+  return (
+    <div style={S.screen}>
+      <div style={S.sHead}>🔑 Volunteer Login</div>
+      <div style={{ ...S.card, marginBottom: 16 }}><p style={{ color: C.gray, fontSize: 12, margin: 0, lineHeight: 1.6 }}>Sign in with your college email. Your profile is saved permanently in Supabase — logging in again restores everything.</p></div>
+      <p style={S.label}>College Email ID *</p>
+      <input style={S.input} type="email" placeholder="yourname@psgcas.edu.in" value={email} onChange={e => { setEmail(e.target.value); setError(""); }} />
+      {error && <p style={{ color: "#fca5a5", fontSize: 12, marginTop: -6, marginBottom: 12 }}>{error}</p>}
+      <button style={{ ...S.btn, ...S.btnGold }} onClick={handleLogin}>Continue</button>
+      <button style={{ ...S.btn, ...S.btnNavy }} onClick={() => setScreen("home")}>Cancel</button>
+    </div>
+  );
+}
+
+// ─── REGISTER ───
+function RegisterScreen({ setScreen, session, onRegistered }) {
+  const [form, setForm] = useState({ name: session?.name || "", email: session?.email || "", roll: "", phone: "", department: "", year: "", occupation: "", first_aid_trained: null, first_aid_certified: null, remarks: "" });
+  const [submitted, setSubmitted] = useState(false); const [loading, setLoading] = useState(false); const [errors, setErrors] = useState({});
+  function update(k, v) { setForm(p => ({ ...p, [k]: v })); setErrors(p => ({ ...p, [k]: null })); }
+  function validate() {
+    const e = {};
+    if (!form.name.trim()) e.name = "Full name is required.";
+    if (!form.email.trim() || !form.email.includes("@")) e.email = "Valid college email required.";
+    if (!form.phone.trim()) e.phone = "Phone number is required.";
+    if (!form.remarks.trim()) e.remarks = "First aid training details required.";
+    if (form.first_aid_certified === null) e.first_aid_certified = "Please select Yes or No.";
+    setErrors(e); return Object.keys(e).length === 0;
+  }
+  async function handleSubmit() {
+    if (!validate()) return;
+    setLoading(true);
+    try {
+      await db.addVolunteer({ name: form.name, roll: form.roll, email: form.email, phone: form.phone, department: form.department, year: form.year, occupation: form.occupation, first_aid_trained: form.first_aid_trained || false, first_aid_certified: form.first_aid_certified || false, remarks: form.remarks, approved: false, online: false, availability: true, lat: CAMPUS_CENTER.lat, lng: CAMPUS_CENTER.lng });
+      const profile = { ...session, registered: true, approved: false, name: form.name };
+      saveSession(profile); onRegistered(profile); setSubmitted(true);
+    } catch (err) { alert("Error saving to database: " + err.message); }
+    setLoading(false);
+  }
+  function YesNo({ value, onChange, error }) {
+    return <div>{[true, false].map(v => <button key={String(v)} style={S.chip(value, v)} onClick={() => onChange(v)}>{v ? "Yes" : "No"}</button>)}{error && <p style={{ color: "#fca5a5", fontSize: 11, marginBottom: 12 }}>{error}</p>}</div>;
+  }
+  if (submitted) return (
+    <div style={{ ...S.screen, textAlign: "center" }}>
+      <div style={{ fontSize: 60, marginBottom: 16 }}>✅</div>
+      <p style={{ color: C.gold, fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Application Submitted!</p>
+      <p style={{ color: C.gray, fontSize: 13, marginBottom: 24, lineHeight: 1.6 }}>Saved to Supabase database. Admin will review and approve your application.</p>
+      <button style={{ ...S.btn, ...S.btnGold }} onClick={() => setScreen("home")}>Back to Home</button>
+    </div>
+  );
+  return (
+    <div style={S.screen}>
+      <div style={S.sHead}>📝 Volunteer Registration</div>
+      <div style={{ ...S.card, marginBottom: 16 }}><p style={{ color: C.gold, fontWeight: 700, fontSize: 12, margin: "0 0 4px" }}>SAVED TO SUPABASE</p><p style={{ color: C.gray, fontSize: 12, margin: 0 }}>Your data is permanently stored. Admin approval required to appear in emergency search.</p></div>
+      {[["Full Name *", "name", "text", "e.g. Karthik R"], ["Roll Number (optional)", "roll", "text", "e.g. 23CS101"], ["College Email *", "email", "email", "you@psgcas.edu.in"], ["Phone Number *", "phone", "tel", "+91 9XXXXXXXXX"], ["Department (optional)", "department", "text", "e.g. Computer Science"], ["Year of Study (optional)", "year", "text", "e.g. 2nd Year"], ["Occupation (optional)", "occupation", "text", "Student / Doctor / Faculty"]].map(([label, key, type, placeholder]) => (
+        <div key={key}>
+          <p style={S.label}>{label}</p>
+          <input style={S.input} type={type} value={form[key]} onChange={e => update(key, e.target.value)} placeholder={placeholder} />
+          {errors[key] && <p style={{ color: "#fca5a5", fontSize: 11, marginTop: -8, marginBottom: 12 }}>{errors[key]}</p>}
+        </div>
+      ))}
+      <p style={S.label}>First Aid Training Completed?</p>
+      <YesNo value={form.first_aid_trained} onChange={v => update("first_aid_trained", v)} />
+      <p style={S.label}>First Aid Certificate? *</p>
+      <YesNo value={form.first_aid_certified} onChange={v => update("first_aid_certified", v)} error={errors.first_aid_certified} />
+      <p style={S.label}>Training Details *</p>
+      <input style={S.input} value={form.remarks} onChange={e => update("remarks", e.target.value)} placeholder="e.g. Red Cross Basic First Aid, 2024" />
+      {errors.remarks && <p style={{ color: "#fca5a5", fontSize: 11, marginTop: -8, marginBottom: 12 }}>{errors.remarks}</p>}
+      <button style={{ ...S.btn, ...S.btnGold }} onClick={handleSubmit} disabled={loading}>{loading ? "Saving to Supabase..." : "Submit Application"}</button>
+      <button style={{ ...S.btn, ...S.btnNavy }} onClick={() => setScreen("home")}>Cancel</button>
+    </div>
+  );
+}
+
+// ─── ALERT PANEL ───
+function AlertPanel() {
+  const [alerts, setAlerts] = useState([...globalAlerts]);
+  useEffect(() => subscribeAlerts(a => setAlerts([...a])), []);
+  function markRead(id) { setAlerts(p => p.map(a => a.id === id ? { ...a, read: true } : a)); }
+  const iconFor = t => ({ call: "📞", map: "🗺", sos: "🚨", approved: "✅", rejected: "❌", broadcast: "📢" }[t] || "🔔");
+  if (alerts.length === 0) return <div style={{ ...S.card, textAlign: "center", padding: 28 }}><p style={{ fontSize: 28, margin: "0 0 8px" }}>🔔</p><p style={{ color: C.gray, fontSize: 13, margin: 0 }}>No alerts yet.</p></div>;
+  return (
+    <div>
+      {alerts.map(a => (
+        <div key={a.id} onClick={() => markRead(a.id)} style={{ ...S.card, border: `1px solid ${(a.type === "call" || a.type === "sos") ? C.red : C.gold}`, background: a.read ? C.navyMid : ((a.type === "call" || a.type === "sos") ? "#2d0a0a" : "#1a1400"), cursor: "pointer" }}>
+          <div style={{ display: "flex", gap: 10 }}>
+            <span style={{ fontSize: 22 }}>{iconFor(a.type)}</span>
+            <div style={{ flex: 1 }}>
+              {!a.read && <span style={{ fontSize: 9, background: C.red, color: C.white, padding: "1px 6px", borderRadius: 10, fontWeight: 800 }}>NEW</span>}
+              <p style={{ color: C.white, fontSize: 12, margin: "4px 0" }}>{a.message}</p>
+              {a.userLoc && <p style={{ color: "#fbbf24", fontSize: 11, margin: "0 0 4px" }}>📍 {a.userLoc.lat.toFixed(4)}, {a.userLoc.lng.toFixed(4)}</p>}
+              <p style={{ color: C.gray, fontSize: 10, margin: 0 }}>{a.volName} · {a.time}</p>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── ADMIN ───
+function AdminScreen({ volunteers, setVolunteers, sosCountToday }) {
+  const [tab, setTab] = useState("alerts"); const [pin, setPin] = useState(""); const [unlocked, setUnlocked] = useState(false);
+  const [alertCount, setAlertCount] = useState(0); const [broadcastMsg, setBroadcastMsg] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
+  useEffect(() => subscribeAlerts(a => setAlertCount(a.filter(x => !x.read).length)), []);
+  if (!unlocked) return (
+    <div style={S.screen}>
+      <div style={S.sHead}>🔐 Admin Access</div>
+      <div style={{ ...S.card, textAlign: "center", padding: 32 }}>
+        <p style={{ color: C.gray, fontSize: 13, marginBottom: 16 }}>Enter admin code</p>
+        <input style={{ ...S.input, textAlign: "center", fontSize: 16, letterSpacing: 2 }} type="password" value={pin} onChange={e => setPin(e.target.value)} placeholder="Admin code" />
+        <button style={{ ...S.btn, ...S.btnGold }} onClick={() => { if (pin === ADMIN_PIN) setUnlocked(true); else alert("Invalid admin code."); }}>Unlock Dashboard</button>
+      </div>
+    </div>
+  );
+  const pending = volunteers.filter(v => !v.approved);
+  const approved = volunteers.filter(v => v.approved);
+
+  async function approve(vol) {
+    setActionLoading(true);
+    try {
+      await db.updateVolunteer(vol.id, { approved: true, online: true, availability: true });
+      setVolunteers(p => p.map(x => x.id === vol.id ? { ...x, approved: true, online: true, availability: true } : x));
+      sendVolunteerAlert(vol, "approved"); playEmergencySound("map");
+    } catch (err) { alert("Error: " + err.message); }
+    setActionLoading(false);
+  }
+
+  async function reject(vol) {
+    if (!window.confirm(`Reject ${vol.name}?`)) return;
+    setActionLoading(true);
+    try {
+      await db.deleteVolunteer(vol.id);
+      setVolunteers(p => p.filter(x => x.id !== vol.id));
+      sendVolunteerAlert(vol, "rejected");
+    } catch (err) { alert("Error: " + err.message); }
+    setActionLoading(false);
+  }
+
+  async function removeVolunteer(vol) {
+    if (!window.confirm(`Remove ${vol.name}?`)) return;
+    setActionLoading(true);
+    try {
+      await db.deleteVolunteer(vol.id);
+      setVolunteers(p => p.filter(x => x.id !== vol.id));
+    } catch (err) { alert("Error: " + err.message); }
+    setActionLoading(false);
+  }
+
+  function sendBroadcast() {
+    if (!broadcastMsg.trim()) return;
+    approved.forEach(v => sendVolunteerAlert(v, "broadcast", { message: broadcastMsg }));
+    playEmergencySound("sos"); setBroadcastMsg("");
+    alert(`Broadcast sent to ${approved.length} volunteer(s).`);
+  }
+
+  const tabs = [
+    { k: "alerts", label: `🔔 Alerts${alertCount > 0 ? ` (${alertCount})` : ""}` },
+    { k: "pending", label: `⏳ Pending (${pending.length})` },
+    { k: "approved", label: `✅ Approved (${approved.length})` },
+    { k: "contacts", label: `📞 Contacts` },
+    { k: "broadcast", label: `📢 Broadcast` },
+  ];
+
+  return (
+    <div style={S.screen}>
+      <div style={S.sHead}>🛡 Admin Dashboard</div>
+      {actionLoading && <div style={{ ...S.card, textAlign: "center", marginBottom: 12 }}><p style={{ color: C.gold, fontSize: 12, margin: 0 }}>⏳ Saving to Supabase...</p></div>}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 16 }}>
+        {tabs.map(({ k, label }) => <button key={k} style={{ ...S.btn, ...(tab === k ? S.btnGold : S.btnNavy), marginBottom: 0, padding: "9px 6px", fontSize: 11 }} onClick={() => setTab(k)}>{label}</button>)}
+      </div>
+      {tab === "alerts" && <AlertPanel />}
+      {tab === "contacts" && <ContactsScreen canEdit />}
+      {tab === "broadcast" && (
+        <div style={S.card}>
+          <p style={S.label}>Broadcast Message</p>
+          <textarea style={{ ...S.input, minHeight: 90, resize: "vertical", fontFamily: "inherit" }} value={broadcastMsg} onChange={e => setBroadcastMsg(e.target.value)} placeholder="e.g. Campus drill at 3 PM today." />
+          <button style={{ ...S.btn, ...S.btnGold, marginBottom: 0 }} onClick={sendBroadcast}>📢 Send to All Approved Volunteers</button>
+        </div>
+      )}
+      {(tab === "pending" || tab === "approved") && (
+        <>
+          {(tab === "pending" ? pending : approved).length === 0 && <div style={{ ...S.card, textAlign: "center", padding: 32 }}><p style={{ color: C.gray, fontSize: 13 }}>No {tab} volunteers.</p></div>}
+          {(tab === "pending" ? pending : approved).map(vol => (
+            <div key={vol.id} style={S.card}>
+              <div style={{ ...S.row, marginBottom: 8 }}>
+                <div style={{ width: 38, height: 38, borderRadius: "50%", background: vol.approved ? C.gold : C.gray, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 14, color: C.navy, flexShrink: 0 }}>{vol.name.charAt(0)}</div>
+                <div style={{ flex: 1 }}><p style={{ fontSize: 14, fontWeight: 700, color: C.white, margin: 0 }}>{vol.name}</p><p style={{ fontSize: 11, color: C.gray, margin: "2px 0 0" }}>{vol.department || vol.occupation || "—"} {vol.year ? `· ${vol.year}` : ""}</p></div>
+                {vol.approved && <span style={S.badge(vol.online)}>{vol.online ? "Online" : "Offline"}</span>}
+              </div>
+              <div style={{ fontSize: 12, color: C.gray, marginBottom: 10, lineHeight: 1.7 }}>
+                {vol.roll && <p style={{ margin: 0 }}>🎓 {vol.roll}</p>}
+                <p style={{ margin: 0 }}>📧 {vol.email}</p>
+                <p style={{ margin: 0 }}>📞 {vol.phone}</p>
+                {vol.occupation && <p style={{ margin: 0 }}>💼 {vol.occupation}</p>}
+                <p style={{ margin: 0 }}>🏅 Certified: {vol.first_aid_certified ? "Yes ✅" : "No ❌"}</p>
+                {vol.remarks && <p style={{ margin: 0 }}>📋 {vol.remarks}</p>}
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                {!vol.approved && <button style={{ ...S.btnSm, background: C.green, color: C.white, flex: 1 }} onClick={() => approve(vol)} disabled={actionLoading}>✓ Approve</button>}
+                <button style={{ ...S.btnSm, background: C.red, color: C.white, flex: 1 }} onClick={() => vol.approved ? removeVolunteer(vol) : reject(vol)} disabled={actionLoading}>{vol.approved ? "Remove" : "✗ Reject"}</button>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── ROOT APP ───
+export default function EmergencyApp() {
+  const { lang, t, toggle: toggleLang } = useLang();
+  const [screen, setScreen] = useState("home");
+  const [locationEnabled, setLocationEnabled] = useState(false);
+  const [userLoc, setUserLoc] = useState(null);
+  const [selectedVol, setSelectedVol] = useState(null);
+  const [toast, setToast] = useState(null);
+  const [alertBadge, setAlertBadge] = useState(0);
+  const [session, setSession] = useState(() => getSession());
+  const [volunteers, setVolunteers] = useState([]);
+  const [dbLoading, setDbLoading] = useState(false);
+  const [sosCountToday, setSosCountToday] = useState(0);
+
+  // Load volunteers from Supabase on startup
+  useEffect(() => {
+    if (locationEnabled) {
+      setDbLoading(true);
+      db.getVolunteers().then(data => { setVolunteers(data); setDbLoading(false); }).catch(err => { console.error(err); setDbLoading(false); });
+    }
+  }, [locationEnabled]);
+
+  useEffect(() => subscribeAlerts(alerts => {
+    setAlertBadge(alerts.filter(a => !a.read).length);
+    const latest = alerts[0];
+    if (latest) { setToast(latest); setTimeout(() => setToast(null), 4500); }
+  }), []);
+
+  function enableLocation() {
+    setTimeout(() => { setUserLoc({ lat: CAMPUS_CENTER.lat, lng: CAMPUS_CENTER.lng }); setLocationEnabled(true); }, 400);
+  }
+
+  function triggerSOS() {
+    const nearby = volunteers.filter(v => v.approved && v.online && v.availability).map(v => ({ ...v, distance: userLoc && v.lat ? haversineMeters(userLoc.lat, userLoc.lng, v.lat, v.lng) : 500 })).filter(v => v.distance <= CAMPUS_RADIUS_KM * 1000).sort((a, b) => a.distance - b.distance);
+    if (nearby.length === 0) { alert("No available volunteers nearby. Please call Emergency Contacts directly."); setScreen("contacts"); return; }
+    nearby.forEach(v => sendVolunteerAlert(v, "sos", { userLoc }));
+    playEmergencySound("sos"); setSosCountToday(c => c + 1);
+    alert(`🚨 SOS sent to ${nearby.length} nearby volunteer(s). Help is on the way.`);
+  }
+
+  function handleLoggedIn(profile) { setSession(profile); setScreen(profile.registered ? "home" : "register"); }
+  function handleRegistered(profile) {
+    setSession(profile);
+    // Refresh volunteers from Supabase
+    db.getVolunteers().then(data => setVolunteers(data)).catch(() => {});
+  }
+
+  if (!locationEnabled) return <LocationGate onEnable={enableLocation} t={t} lang={lang} onToggleLang={toggleLang} />;
+
+  const navItems = [
+    { id: "home", icon: "🏠", label: t.home },
+    { id: "volunteers", icon: "🆘", label: t.volunteers },
+    { id: "register", icon: "📝", label: t.register },
+    { id: "admin", icon: "🛡", label: t.admin },
+  ];
+
+  const screens = {
+    home: <HomeScreen userLoc={userLoc} setScreen={setScreen} t={t} onSOS={triggerSOS} volunteers={volunteers} sosCountToday={sosCountToday} />,
+    volunteers: dbLoading ? <LoadingScreen msg="Loading volunteers from Supabase..." /> : <VolunteersScreen userLoc={userLoc} setScreen={setScreen} setSelectedVol={setSelectedVol} volunteers={volunteers} />,
+    map: <MapScreen userLoc={userLoc} selectedVol={selectedVol} setScreen={setScreen} />,
+    campusMap: <CampusMapScreen setScreen={setScreen} />,
+    contacts: <ContactsScreen />,
+    login: <LoginScreen onLoggedIn={handleLoggedIn} setScreen={setScreen} t={t} />,
+    register: session ? <RegisterScreen setScreen={setScreen} session={session} onRegistered={handleRegistered} /> : <LoginScreen onLoggedIn={handleLoggedIn} setScreen={setScreen} t={t} />,
+    admin: <AdminScreen volunteers={volunteers} setVolunteers={setVolunteers} sosCountToday={sosCountToday} />,
+  };
+
+  return (
+    <div style={S.app}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');@keyframes slideDown{from{opacity:0;transform:translateX(-50%) translateY(-16px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}*{-webkit-tap-highlight-color:transparent;}input::placeholder,textarea::placeholder{color:#475569;}input:focus,textarea:focus{border-color:#D4A017!important;}button:active{transform:scale(0.97);}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:#0A1628}::-webkit-scrollbar-thumb{background:#1A3058;border-radius:4px}`}</style>
+      {toast && (
+        <div style={{ position: "fixed", top: 96, left: "50%", transform: "translateX(-50%)", zIndex: 999, width: "90%", maxWidth: 380, background: (toast.type === "call" || toast.type === "sos") ? "#7f1d1d" : "#1a1400", border: `2px solid ${(toast.type === "call" || toast.type === "sos") ? C.red : C.gold}`, borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 12, animation: "slideDown 0.3s ease" }}>
+          <span style={{ fontSize: 24 }}>{toast.type === "sos" ? "🆘" : toast.type === "call" ? "🚨" : toast.type === "approved" ? "✅" : "📢"}</span>
+          <div style={{ flex: 1 }}><p style={{ fontWeight: 800, fontSize: 11, color: C.gold, margin: "0 0 2px" }}>ALERT</p><p style={{ color: C.white, fontSize: 12, margin: 0 }}>To <strong>{toast.volName}</strong>: {toast.message}</p></div>
+          <button onClick={() => setToast(null)} style={{ background: "none", border: "none", color: C.gray, fontSize: 18, cursor: "pointer" }}>✕</button>
+        </div>
+      )}
+      <Header t={t} lang={lang} onToggleLang={toggleLang} />
+      {dbLoading && screen === "home" && <div style={{ background: "#1a1400", padding: "8px 16px", textAlign: "center" }}><p style={{ color: C.gold, fontSize: 11, margin: 0 }}>⏳ Loading data from Supabase...</p></div>}
+      <div>{screens[screen] || screens.home}</div>
+      <nav style={S.navBar}>
+        {navItems.map(n => (
+          <button key={n.id} style={S.navBtn(screen === n.id)} onClick={() => setScreen(n.id)}>
+            <span style={{ fontSize: 20, position: "relative", display: "inline-block" }}>
+              {n.icon}
+              {n.id === "admin" && alertBadge > 0 && <span style={{ position: "absolute", top: -4, right: -6, background: C.red, color: C.white, borderRadius: "50%", fontSize: 8, fontWeight: 800, width: 14, height: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>{alertBadge}</span>}
+            </span>
+            {n.label}
+          </button>
+        ))}
+      </nav>
+    </div>
+  );
+}
