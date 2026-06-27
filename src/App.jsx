@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
-// ── CONFIG ────────────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://qyoektirhvroaarnzazy.supabase.co";
 const SUPABASE_KEY = "sb_publishable_3LBPKOMdfUMeEkguQO98ug_7jcYg9ct";
+const ADMIN_USERNAME = "aga2026";
 const ADMIN_PIN = "6202csacgspaga";
 const CAMPUS_RADIUS_KM = 2.0;
 const CAMPUS_CENTER = { lat: 11.0345, lng: 77.0355 };
@@ -25,7 +25,6 @@ const db = {
   deleteVolunteer: (id) => sbFetch(`/volunteers?id=eq.${id}`, { method: "DELETE", prefer: "return=minimal" }),
 };
 
-// ── FIRST AID DATA ────────────────────────────────────────────────────────
 const FIRST_AID_EN = [
   { id:"bls", icon:"🫀", title:"Basic Life Support (BLS)", steps:["Ensure scene safety — fire, electricity, traffic.","Tap shoulders firmly: 'Are you okay?'","Call 108 immediately.","Head Tilt–Chin Lift. Check breathing 10 sec.","Breathing → Recovery Position. Not breathing → CPR."] },
   { id:"recovery", icon:"🛌", title:"Recovery Position", steps:["Kneel beside victim.","Place nearest arm at right angle.","Bring far arm across chest.","Bend far knee upward.","Roll onto side carefully.","Tilt head back to keep airway open.","Monitor until help arrives."] },
@@ -78,7 +77,6 @@ const CAMPUS_LANDMARKS = [
   { name:"Medical Room", lat:11.0355, lng:77.0375, icon:"⚕️" },
 ];
 
-// ── UTILS ─────────────────────────────────────────────────────────────────
 function haversine(a,b,c,d){const R=6371000,r=x=>x*Math.PI/180,dL=r(c-a),dG=r(d-b),s=Math.sin(dL/2)**2+Math.cos(r(a))*Math.cos(r(c))*Math.sin(dG/2)**2;return R*2*Math.atan2(Math.sqrt(s),Math.sqrt(1-s));}
 function bearingDeg(a,b,c,d){const r=x=>x*Math.PI/180,dG=r(d-b);return(Math.atan2(Math.sin(dG)*Math.cos(r(c)),Math.cos(r(a))*Math.sin(r(c))-Math.sin(r(a))*Math.cos(r(c))*Math.cos(dG))*180/Math.PI+360)%360;}
 function fmtDist(m){return m<1000?`${Math.round(m)}m`:`${(m/1000).toFixed(1)}km`;}
@@ -95,12 +93,10 @@ function playSound(type){
   }catch(e){}
 }
 
-// ── GLOBAL ALERTS (in-memory for artifact) ────────────────────────────────
 let gAlerts=[], aListeners=[];
 function subAlerts(fn){aListeners.push(fn);return()=>{aListeners=aListeners.filter(l=>l!==fn);};}
 function pushGAlert(a){gAlerts=[a,...gAlerts].slice(0,80);aListeners.forEach(fn=>fn([...gAlerts]));}
 
-// Per-volunteer notifs stored in memory
 const volNotifStore={};
 function getVolNotifs(email){return volNotifStore[email]||[];}
 function saveVolNotifs(email,n){volNotifStore[email]=n.slice(0,50);}
@@ -113,7 +109,6 @@ function sendAlert(vol,type,extra={}){
   if(vol?.email)pushVolNotif(vol.email,notif);
 }
 
-// ── DESIGN ────────────────────────────────────────────────────────────────
 const C={navy:"#0A1628",navyMid:"#122040",navyLight:"#1A3058",gold:"#D4A017",red:"#C0392B",white:"#FFFFFF",gray:"#94A3B8",green:"#16A34A",blue:"#3B82F6"};
 const S={
   app:{fontFamily:"'Inter',system-ui,sans-serif",background:C.navy,minHeight:"100vh",color:C.white,maxWidth:430,margin:"0 auto",position:"relative",overflowX:"hidden"},
@@ -146,7 +141,6 @@ button:active{transform:scale(0.97)!important;}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0.35}}
 `;
 
-// ── HEADER ────────────────────────────────────────────────────────────────
 function Header({lang,onToggle}){
   return(
     <div style={{background:C.navyMid,borderBottom:`2px solid ${C.gold}`,padding:"8px 12px"}}>
@@ -169,7 +163,7 @@ function Header({lang,onToggle}){
 }
 
 function LocationBanner({userLoc,lang}){
-  if(!userLoc)return null;
+  if(!userLoc) return null;
   return(
     <div style={{background:"#0d1f35",borderBottom:`1px solid ${C.navyLight}`,padding:"5px 14px",display:"flex",alignItems:"center",gap:8}}>
       <span style={{fontSize:12}}>📍</span>
@@ -180,29 +174,37 @@ function LocationBanner({userLoc,lang}){
   );
 }
 
-// ── PHONE GATE ────────────────────────────────────────────────────────────
-function PhoneGate({onSave,lang}){
-  const[phone,setPhone]=useState("");
-  const[err,setErr]=useState("");
-  function save(){const t=phone.trim();if(t.length<7){setErr("Please enter a valid phone number.");return;}onSave(t);}
+function PhoneGate({onSave,lang,savedName,savedPhone}){
+  const[name,setName]=useState(savedName||"");
+  const[phone,setPhone]=useState(savedPhone||"");
+  const[errs,setErrs]=useState({});
+  function save(){
+    const e={};
+    if(!name.trim()) e.name=lang==="ta"?"பெயர் தேவை":"Name is required";
+    if(phone.trim().length<7) e.phone=lang==="ta"?"சரியான எண் தேவை":"Please enter a valid phone number";
+    if(Object.keys(e).length){setErrs(e);return;}
+    onSave(name.trim(),phone.trim());
+  }
   return(
     <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
       <div style={{width:"100%",maxWidth:380,textAlign:"center"}}>
         <div style={{fontSize:48,marginBottom:16}}>📱</div>
-        <p style={{fontSize:18,fontWeight:800,color:C.gold,marginBottom:8}}>{lang==="ta"?"உங்கள் தொலைபேசி எண்":"Your Phone Number"}</p>
+        <p style={{fontSize:18,fontWeight:800,color:C.gold,marginBottom:8}}>{lang==="ta"?"உங்கள் விவரங்கள்":"Your Details"}</p>
         <div style={{...S.card(C.gold),textAlign:"left",marginBottom:16}}>
-          <p style={{color:C.gray,fontSize:12,margin:0,lineHeight:1.6}}>{lang==="ta"?"உங்கள் தொலைபேசி எண் தன்னார்வலர்களுக்கு அனுப்பப்படும்.":"Your phone number will be shared with nearby volunteers so they can call you in an emergency."}</p>
+          <p style={{color:C.gray,fontSize:12,margin:0,lineHeight:1.6}}>{lang==="ta"?"உங்கள் பெயர் மற்றும் தொலைபேசி எண் தன்னார்வலர்களுக்கு அனுப்பப்படும்.":"Your name and phone number will be shared with nearby volunteers in an emergency."}</p>
         </div>
+        <span style={S.label}>{lang==="ta"?"முழு பெயர் *":"Full Name *"}</span>
+        <input style={S.input} type="text" placeholder={lang==="ta"?"உங்கள் பெயர்":"Your full name"} value={name} onChange={e=>{setName(e.target.value);setErrs(p=>({...p,name:null}));}}/>
+        {errs.name&&<p style={S.err}>{errs.name}</p>}
         <span style={S.label}>{lang==="ta"?"தொலைபேசி எண் *":"Phone Number *"}</span>
-        <input style={S.input} type="tel" placeholder="+91 9XXXXXXXXX" value={phone} onChange={e=>{setPhone(e.target.value);setErr("");}}/>
-        {err&&<p style={S.err}>{err}</p>}
+        <input style={S.input} type="tel" placeholder="+91 9XXXXXXXXX" value={phone} onChange={e=>{setPhone(e.target.value);setErrs(p=>({...p,phone:null}));}}/>
+        {errs.phone&&<p style={S.err}>{errs.phone}</p>}
         <button style={S.btn(C.gold,C.navy)} onClick={save}>{lang==="ta"?"சேமித்து தொடரவும்":"Save & Continue →"}</button>
       </div>
     </div>
   );
 }
 
-// ── LOCATION GATE ─────────────────────────────────────────────────────────
 function LocationGate({onEnable,lang,onToggle}){
   const[err,setErr]=useState(false);
   function tryEnable(){
@@ -233,7 +235,6 @@ function LocationGate({onEnable,lang,onToggle}){
   );
 }
 
-// ── HOME ──────────────────────────────────────────────────────────────────
 function HomeScreen({userLoc,setScreen,lang,onSOS,volunteers,sosToday}){
   const approved=volunteers.filter(v=>v.approved);
   const active=approved.filter(v=>v.online&&v.availability).length;
@@ -269,7 +270,6 @@ function HomeScreen({userLoc,setScreen,lang,onSOS,volunteers,sosToday}){
   );
 }
 
-// ── VOLUNTEERS ────────────────────────────────────────────────────────────
 function VolunteersScreen({userLoc,setScreen,setSelectedVol,volunteers}){
   const[filter,setFilter]=useState("all");
   const withDist=volunteers.filter(v=>v.approved).map(v=>({
@@ -320,33 +320,21 @@ function VolunteersScreen({userLoc,setScreen,setSelectedVol,volunteers}){
   );
 }
 
-// ── MAP with live GPS polling ──────────────────────────────────────────────
 function MapScreen({userLoc,selectedVol,setScreen}){
   const[myLoc,setMyLoc]=useState(userLoc);
   const[volLoc,setVolLoc]=useState(selectedVol?{lat:parseFloat(selectedVol.lat||CAMPUS_CENTER.lat),lng:parseFloat(selectedVol.lng||CAMPUS_CENTER.lng)}:null);
-
-  // Live user GPS
   useEffect(()=>{
-    if(!navigator.geolocation)return;
-    const id=navigator.geolocation.watchPosition(
-      p=>setMyLoc({lat:p.coords.latitude,lng:p.coords.longitude}),
-      null,{enableHighAccuracy:true,maximumAge:5000}
-    );
+    if(!navigator.geolocation) return;
+    const id=navigator.geolocation.watchPosition(p=>setMyLoc({lat:p.coords.latitude,lng:p.coords.longitude}),null,{enableHighAccuracy:true,maximumAge:5000});
     return()=>navigator.geolocation.clearWatch(id);
   },[]);
-
-  // Poll volunteer location from Supabase every 10s
   useEffect(()=>{
-    if(!selectedVol?.id)return;
-    const poll=()=>db.getVolunteers().then(vols=>{
-      const v=vols.find(x=>x.id===selectedVol.id);
-      if(v&&v.lat&&v.lng)setVolLoc({lat:parseFloat(v.lat),lng:parseFloat(v.lng)});
-    }).catch(()=>{});
+    if(!selectedVol?.id) return;
+    const poll=()=>db.getVolunteers().then(vols=>{const v=vols.find(x=>x.id===selectedVol.id);if(v&&v.lat&&v.lng)setVolLoc({lat:parseFloat(v.lat),lng:parseFloat(v.lng)});}).catch(()=>{});
     poll();
     const t=setInterval(poll,10000);
     return()=>clearInterval(t);
   },[selectedVol?.id]);
-
   const vol=selectedVol;
   if(!vol){setScreen("volunteers");return null;}
   const uLat=myLoc?.lat||CAMPUS_CENTER.lat,uLng=myLoc?.lng||CAMPUS_CENTER.lng;
@@ -372,9 +360,8 @@ function MapScreen({userLoc,selectedVol,setScreen}){
       <div style={{...S.card(),marginBottom:8,fontSize:11,fontFamily:"monospace",lineHeight:1.8}}>
         <div style={{color:C.blue}}>📍 You: {fmtCoord(uLat)}, {fmtCoord(uLng)}</div>
         <div style={{color:C.gold}}>🎯 {vol.name?.split(" ")[0]}: {fmtCoord(vLat)}, {fmtCoord(vLng)}</div>
-        <div style={{color:C.gray,fontSize:10}}>↻ Volunteer location updates every 10s from Supabase</div>
+        <div style={{color:C.gray,fontSize:10}}>↻ Volunteer location updates every 10s</div>
       </div>
-      {/* Radar */}
       <div style={{background:C.navyLight,borderRadius:12,height:170,marginBottom:10,position:"relative",overflow:"hidden",backgroundImage:"radial-gradient(circle,rgba(212,160,23,0.08) 1px,transparent 1px)",backgroundSize:"16px 16px"}}>
         {[1,2,3].map(r=><div key={r} style={{position:"absolute",top:"50%",left:"50%",width:r*52,height:r*52,marginLeft:-(r*26),marginTop:-(r*26),border:`1px solid rgba(148,163,184,${0.22-r*0.05})`,borderRadius:"50%"}}/>)}
         <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",textAlign:"center"}}>
@@ -392,7 +379,6 @@ function MapScreen({userLoc,selectedVol,setScreen}){
   );
 }
 
-// ── CAMPUS MAP ────────────────────────────────────────────────────────────
 function CampusMapScreen({setScreen}){
   const bbox=`${CAMPUS_CENTER.lng-0.006},${CAMPUS_CENTER.lat-0.004},${CAMPUS_CENTER.lng+0.006},${CAMPUS_CENTER.lat+0.004}`;
   return(
@@ -415,7 +401,6 @@ function CampusMapScreen({setScreen}){
   );
 }
 
-// ── FIRST AID GUIDE ───────────────────────────────────────────────────────
 function GuideScreen({setScreen,lang,canEdit=false}){
   const[guideEn,setGuideEn]=useState(FIRST_AID_EN);
   const[guideTa,setGuideTa]=useState(FIRST_AID_TA);
@@ -423,7 +408,6 @@ function GuideScreen({setScreen,lang,canEdit=false}){
   const[editing,setEditing]=useState(null);
   const[editForm,setEditForm]=useState({title:"",steps:""});
   const items=lang==="ta"?guideTa:guideEn;
-
   function startEdit(item,eLang){
     const src=eLang==="en"?guideEn:guideTa;
     const found=src.find(x=>x.id===item.id)||item;
@@ -437,7 +421,6 @@ function GuideScreen({setScreen,lang,canEdit=false}){
     else{setGuideTa(g=>g.map(x=>x.id===editing.id?{...x,title:editForm.title,steps:stepsArr}:x));}
     setEditing(null);
   }
-
   if(selected!==null){
     const item=items[selected];
     return(
@@ -496,14 +479,16 @@ function GuideScreen({setScreen,lang,canEdit=false}){
   );
 }
 
-// ── CONTACTS ──────────────────────────────────────────────────────────────
 function ContactsScreen({canEdit=false,setScreen}){
   const[contacts,setContacts]=useState(DEFAULT_CONTACTS);
   const[editKey,setEditKey]=useState(null);
   const[ef,setEf]=useState({icon:"",label:"",number:"",desc:""});
   const[adding,setAdding]=useState(false);
-  function persist(next){setContacts(next);}
-  function save(){if(!ef.label||!ef.number)return;adding?persist([...contacts,{key:`c-${Date.now()}`,icon:ef.icon||"📞",label:ef.label,number:ef.number,desc:ef.desc}]):persist(contacts.map(c=>c.key===editKey?{...c,...ef}:c));setEditKey(null);}
+  function save(){
+    if(!ef.label||!ef.number) return;
+    adding?setContacts(p=>[...p,{key:`c-${Date.now()}`,icon:ef.icon||"📞",label:ef.label,number:ef.number,desc:ef.desc}]):setContacts(p=>p.map(c=>c.key===editKey?{...c,...ef}:c));
+    setEditKey(null);
+  }
   return(
     <div style={{...S.screen,animation:"fadeUp 0.3s ease"}}>
       {!canEdit&&<button style={{...S.btnSm(C.navyLight,C.white),marginBottom:12}} onClick={()=>setScreen("home")}>← Back</button>}
@@ -522,7 +507,7 @@ function ContactsScreen({canEdit=false,setScreen}){
           {canEdit&&(
             <div style={{display:"flex",gap:4}}>
               <button style={{background:"rgba(0,0,0,0.25)",border:"none",borderRadius:6,padding:6,cursor:"pointer",color:C.white,fontSize:12}} onClick={()=>{setEditKey(c.key);setEf({icon:c.icon,label:c.label,number:c.number,desc:c.desc});setAdding(false);}}>✏️</button>
-              <button style={{background:"rgba(0,0,0,0.25)",border:"none",borderRadius:6,padding:6,cursor:"pointer",color:C.white,fontSize:12}} onClick={()=>{if(window.confirm("Remove?"))persist(contacts.filter(x=>x.key!==c.key));}}>🗑️</button>
+              <button style={{background:"rgba(0,0,0,0.25)",border:"none",borderRadius:6,padding:6,cursor:"pointer",color:C.white,fontSize:12}} onClick={()=>{if(window.confirm("Remove?"))setContacts(p=>p.filter(x=>x.key!==c.key));}}>🗑️</button>
             </div>
           )}
         </div>
@@ -546,15 +531,16 @@ function ContactsScreen({canEdit=false,setScreen}){
   );
 }
 
-// ── LOGIN ─────────────────────────────────────────────────────────────────
 function LoginScreen({onLoggedIn,setScreen,sessionStore}){
-  const[email,setEmail]=useState("");const[err,setErr]=useState("");
+  const[email,setEmail]=useState("");
+  const[err,setErr]=useState("");
   function handle(){
     const t=email.trim().toLowerCase();
     if(!t.includes("@")||!t.includes(".")){setErr("Enter a valid email.");return;}
     const existing=sessionStore.get();
     const profile=(existing&&existing.email===t)?existing:{email:t,registered:false,name:"",approved:false};
-    sessionStore.set(profile);onLoggedIn(profile);
+    sessionStore.set(profile);
+    onLoggedIn(profile);
   }
   return(
     <div style={{...S.screen,animation:"fadeUp 0.3s ease"}}>
@@ -569,13 +555,12 @@ function LoginScreen({onLoggedIn,setScreen,sessionStore}){
   );
 }
 
-// ── PROFILE ───────────────────────────────────────────────────────────────
 function ProfileScreen({session,setScreen,volunteers,setVolunteers,onSessionUpdate,lang,sessionStore}){
   const vol=session?volunteers.find(v=>v.email===session.email):null;
   const[editing,setEditing]=useState(false);
   const[saving,setSaving]=useState(false);
   const[form,setForm]=useState({name:vol?.name||"",phone:vol?.phone||"",department:vol?.department||"",year:vol?.year||"",occupation:vol?.occupation||"",remarks:vol?.remarks||""});
-  if(!session)return(
+  if(!session) return(
     <div style={S.screen}>
       <div style={{...S.card(),textAlign:"center",padding:32}}>
         <p style={{fontSize:32,margin:"0 0 12px"}}>👤</p>
@@ -584,7 +569,7 @@ function ProfileScreen({session,setScreen,volunteers,setVolunteers,onSessionUpda
       </div>
     </div>
   );
-  if(!vol)return(
+  if(!vol) return(
     <div style={S.screen}>
       <div style={{...S.card(),textAlign:"center",padding:32}}>
         <p style={{fontSize:32,margin:"0 0 12px"}}>📝</p>
@@ -650,26 +635,45 @@ function ProfileScreen({session,setScreen,volunteers,setVolunteers,onSessionUpda
   );
 }
 
-// ── REGISTER ──────────────────────────────────────────────────────────────
 function RegisterScreen({setScreen,session,onRegistered,userLoc,lang,sessionStore}){
   const[form,setForm]=useState({name:session?.name||"",email:session?.email||"",roll:"",phone:"",department:"",year:"",occupation:"",first_aid_trained:null,first_aid_certified:null,remarks:""});
-  const[done,setDone]=useState(false);const[loading,setLoading]=useState(false);const[errs,setErrs]=useState({});
+  const[done,setDone]=useState(false);
+  const[loading,setLoading]=useState(false);
+  const[errs,setErrs]=useState({});
   function upd(k,v){setForm(p=>({...p,[k]:v}));setErrs(p=>({...p,[k]:null}));}
-  function validate(){const e={};if(!form.name.trim())e.name="Required";if(!form.email.includes("@"))e.email="Valid email required";if(!form.phone.trim())e.phone="Required";if(!form.remarks.trim())e.remarks="Required";if(form.first_aid_certified===null)e.cert="Required";setErrs(e);return Object.keys(e).length===0;}
+  function validate(){
+    const e={};
+    if(!form.name.trim()) e.name="Required";
+    if(!form.email.includes("@")) e.email="Valid email required";
+    if(!form.phone.trim()) e.phone="Required";
+    if(!form.remarks.trim()) e.remarks="Required";
+    if(form.first_aid_certified===null) e.cert="Required";
+    setErrs(e);
+    return Object.keys(e).length===0;
+  }
   async function submit(){
-    if(!validate())return;setLoading(true);
+    if(!validate()) return;
+    setLoading(true);
     try{
       await db.addVolunteer({name:form.name,roll:form.roll,email:form.email,phone:form.phone,department:form.department,year:form.year,occupation:form.occupation,first_aid_trained:form.first_aid_trained||false,first_aid_certified:form.first_aid_certified||false,remarks:form.remarks,approved:false,online:false,availability:true,lat:userLoc?.lat||CAMPUS_CENTER.lat,lng:userLoc?.lng||CAMPUS_CENTER.lng});
       const p={...session,registered:true,approved:false,name:form.name};
       sessionStore.set(p);
       pushVolNotif(form.email,{type:"registered",message:"📝 Registration submitted! Admin will review soon.",volName:form.name});
       playSound("call");
-      onRegistered(p);setDone(true);
+      onRegistered(p);
+      setDone(true);
     }catch(e){alert("Error: "+e.message);}
     setLoading(false);
   }
-  function YN({value,onChange,error}){return<div style={{marginBottom:10}}>{[true,false].map(v=><button key={String(v)} style={S.chip(value,v)} onClick={()=>onChange(v)}>{v?(lang==="ta"?"ஆம்":"Yes"):(lang==="ta"?"இல்லை":"No")}</button>)}{error&&<p style={S.err}>{error}</p>}</div>;}
-  if(done)return(
+  function YN({value,onChange,error}){
+    return(
+      <div style={{marginBottom:10}}>
+        {[true,false].map(v=><button key={String(v)} style={S.chip(value,v)} onClick={()=>onChange(v)}>{v?(lang==="ta"?"ஆம்":"Yes"):(lang==="ta"?"இல்லை":"No")}</button>)}
+        {error&&<p style={S.err}>{error}</p>}
+      </div>
+    );
+  }
+  if(done) return(
     <div style={{...S.screen,textAlign:"center"}}>
       <div style={{fontSize:60,marginBottom:14}}>✅</div>
       <p style={{color:C.gold,fontSize:20,fontWeight:800,marginBottom:8}}>Application Submitted!</p>
@@ -703,12 +707,11 @@ function RegisterScreen({setScreen,session,onRegistered,userLoc,lang,sessionStor
   );
 }
 
-// ── MY ALERTS ─────────────────────────────────────────────────────────────
 function MyAlertsScreen({session,lang}){
   const email=session?.email;
   const[notifs,setNotifs]=useState(()=>email?getVolNotifs(email):[]);
   useEffect(()=>{
-    if(!email)return;
+    if(!email) return;
     const t=setInterval(()=>setNotifs([...getVolNotifs(email)]),3000);
     return()=>clearInterval(t);
   },[email]);
@@ -716,7 +719,7 @@ function MyAlertsScreen({session,lang}){
   function clearAll(){setNotifs([]);if(email)saveVolNotifs(email,[]);}
   const iconFor=t=>({call:"📞",map:"🗺",sos:"🚨",approved:"✅",rejected:"❌",broadcast:"📢",registered:"📝"}[t]||"🔔");
   const unread=notifs.filter(n=>!n.read).length;
-  if(!email)return(
+  if(!email) return(
     <div style={S.screen}>
       <div style={S.sHead}>🔔 {lang==="ta"?"என் விழிப்பூட்டல்கள்":"My Notifications"}</div>
       <div style={{...S.card(),textAlign:"center",padding:32}}><p style={{fontSize:32,margin:"0 0 10px"}}>🔒</p><p style={{color:C.gray,fontSize:13}}>Login to see notifications.</p></div>
@@ -739,7 +742,12 @@ function MyAlertsScreen({session,lang}){
               {!n.read&&<span style={{fontSize:9,background:C.red,color:C.white,padding:"1px 6px",borderRadius:10,fontWeight:800,display:"inline-block",marginBottom:2}}>NEW</span>}
               <p style={{color:C.white,fontSize:13,margin:"2px 0",fontWeight:n.read?400:600}}>{n.message}</p>
               {n.userLoc&&<p style={{color:"#fbbf24",fontSize:10,margin:"0 0 2px",fontFamily:"monospace"}}>📍 {fmtCoord(n.userLoc.lat)}, {fmtCoord(n.userLoc.lng)}</p>}
-              {n.userPhone&&<p style={{color:"#86efac",fontSize:11,margin:"0 0 2px",fontWeight:700}}>📞 Caller: {n.userPhone}</p>}
+              {n.userPhone&&<p style={{color:"#86efac",fontSize:11,margin:"0 0 6px",fontWeight:700}}>📞 Caller: {n.userPhone}</p>}
+              {(n.type==="sos"||n.type==="call")&&n.userPhone&&(
+                <div style={{display:"flex",gap:6,marginBottom:4}}>
+                  <button onClick={e=>{e.stopPropagation();window.location.href=`tel:${n.userPhone}`;}} style={{...S.btnSm(C.red,C.white),flex:1,fontSize:11,padding:"7px 8px"}}>📞 Call Now</button>
+                </div>
+              )}
               <p style={{color:C.gray,fontSize:10,margin:0}}>{n.time}</p>
             </div>
           </div>
@@ -749,16 +757,15 @@ function MyAlertsScreen({session,lang}){
   );
 }
 
-// ── ADMIN ALERTS ──────────────────────────────────────────────────────────
 function AdminAlerts(){
   const[alerts,setAlerts]=useState([...gAlerts]);
   useEffect(()=>subAlerts(a=>setAlerts([...a])),[]);
   const icon=t=>({call:"📞",map:"🗺",sos:"🚨",approved:"✅",rejected:"❌",broadcast:"📢",registered:"📝"}[t]||"🔔");
-  if(!alerts.length)return<div style={{...S.card(),textAlign:"center",padding:28}}><p style={{fontSize:28,margin:"0 0 8px"}}>🔔</p><p style={{color:C.gray,fontSize:13}}>No alerts yet.</p></div>;
+  if(!alerts.length) return <div style={{...S.card(),textAlign:"center",padding:28}}><p style={{fontSize:28,margin:"0 0 8px"}}>🔔</p><p style={{color:C.gray,fontSize:13}}>No alerts yet.</p></div>;
   return(
     <div>
       {alerts.map(a=>(
-        <div key={a.id} style={{...S.card(a.type==="sos"||a.type==="call"?C.red:C.gold),background:a.read?C.navyMid:a.type==="sos"?"#2d0a0a":"#1a1400",cursor:"pointer",marginBottom:8}} onClick={()=>setAlerts(p=>p.map(x=>x.id===a.id?{...x,read:true}:x))}>
+        <div key={a.id} onClick={()=>setAlerts(p=>p.map(x=>x.id===a.id?{...x,read:true}:x))} style={{...S.card(a.type==="sos"||a.type==="call"?C.red:C.gold),background:a.read?C.navyMid:a.type==="sos"?"#2d0a0a":"#1a1400",cursor:"pointer",marginBottom:8}}>
           <div style={S.row}>
             <span style={{fontSize:20}}>{icon(a.type)}</span>
             <div style={{flex:1}}>
@@ -775,22 +782,36 @@ function AdminAlerts(){
   );
 }
 
-// ── ADMIN ─────────────────────────────────────────────────────────────────
 function AdminScreen({volunteers,setVolunteers,sosToday,lang}){
-  const[tab,setTab]=useState("alerts");const[pin,setPin]=useState("");const[unlocked,setUnlocked]=useState(false);
-  const[badge,setBadge]=useState(0);const[bcast,setBcast]=useState("");const[busy,setBusy]=useState(false);
+  const[tab,setTab]=useState("alerts");
+  const[username,setUsername]=useState("");
+  const[pin,setPin]=useState("");
+  const[unlocked,setUnlocked]=useState(false);
+  const[badge,setBadge]=useState(0);
+  const[bcast,setBcast]=useState("");
+  const[busy,setBusy]=useState(false);
+  const[loginErr,setLoginErr]=useState("");
   useEffect(()=>subAlerts(a=>setBadge(a.filter(x=>!x.read).length)),[]);
-  if(!unlocked)return(
+
+  if(!unlocked) return(
     <div style={{...S.screen,animation:"fadeUp 0.3s ease"}}>
       <div style={S.sHead}>🔐 Admin Access</div>
       <div style={{...S.card(),textAlign:"center",padding:28}}>
-        <p style={{color:C.gray,fontSize:13,marginBottom:14}}>Enter admin code to unlock</p>
-        <input style={{...S.input,textAlign:"center",letterSpacing:2}} type="password" value={pin} onChange={e=>setPin(e.target.value)} placeholder="Admin code" onKeyDown={e=>e.key==="Enter"&&(pin===ADMIN_PIN?setUnlocked(true):alert("Invalid code."))}/>
-        <button style={S.btn(C.gold,C.navy)} onClick={()=>{if(pin===ADMIN_PIN)setUnlocked(true);else alert("Invalid admin code.");}}>Unlock Dashboard</button>
+        <p style={{color:C.gray,fontSize:13,marginBottom:14}}>Enter admin credentials to unlock</p>
+        <span style={S.label}>Username</span>
+        <input style={S.input} type="text" placeholder="Admin username" value={username} onChange={e=>{setUsername(e.target.value);setLoginErr("");}}/>
+        <span style={S.label}>Password</span>
+        <input style={S.input} type="password" placeholder="Admin password" value={pin} onChange={e=>{setPin(e.target.value);setLoginErr("");}} onKeyDown={e=>{if(e.key==="Enter"){if(username===ADMIN_USERNAME&&pin===ADMIN_PIN)setUnlocked(true);else setLoginErr("Invalid username or password.");}}}/>
+        {loginErr&&<p style={{...S.err,textAlign:"center",marginBottom:10}}>{loginErr}</p>}
+        <button style={S.btn(C.gold,C.navy)} onClick={()=>{if(username===ADMIN_USERNAME&&pin===ADMIN_PIN)setUnlocked(true);else setLoginErr("Invalid username or password.");}}>Unlock Dashboard</button>
+        <p style={{color:C.gray,fontSize:10,marginTop:4}}>Username: aga2026</p>
       </div>
     </div>
   );
-  const pending=volunteers.filter(v=>!v.approved),approved=volunteers.filter(v=>v.approved);
+
+  const pending=volunteers.filter(v=>!v.approved);
+  const approved=volunteers.filter(v=>v.approved);
+
   async function approve(vol){
     setBusy(true);
     try{
@@ -803,7 +824,8 @@ function AdminScreen({volunteers,setVolunteers,sosToday,lang}){
     setBusy(false);
   }
   async function reject(vol){
-    if(!window.confirm(`Reject ${vol.name}?`))return;setBusy(true);
+    if(!window.confirm(`Reject ${vol.name}?`)) return;
+    setBusy(true);
     try{
       await db.deleteVolunteer(vol.id);
       setVolunteers(p=>p.filter(v=>v.id!==vol.id));
@@ -813,15 +835,17 @@ function AdminScreen({volunteers,setVolunteers,sosToday,lang}){
     setBusy(false);
   }
   async function remove(vol){
-    if(!window.confirm(`Remove ${vol.name} permanently?`))return;setBusy(true);
+    if(!window.confirm(`Remove ${vol.name} permanently?`)) return;
+    setBusy(true);
     try{await db.deleteVolunteer(vol.id);setVolunteers(p=>p.filter(v=>v.id!==vol.id));}catch(e){alert(e.message);}
     setBusy(false);
   }
   function broadcast(){
-    if(!bcast.trim())return;
+    if(!bcast.trim()) return;
     approved.forEach(v=>{sendAlert(v,"broadcast",{message:bcast});pushVolNotif(v.email,{type:"broadcast",message:`📢 Admin: ${bcast}`,volName:v.name});});
     playSound("sos");setBcast("");alert(`Broadcast sent to ${approved.length} volunteer(s).`);
   }
+
   const tabs=[{k:"alerts",l:`🔔 Alerts${badge>0?` (${badge})`:""}`},{k:"pending",l:`⏳ Pending (${pending.length})`},{k:"approved",l:`✅ Approved (${approved.length})`},{k:"contacts",l:"📞 Contacts"},{k:"guide",l:"🩺 Guide"},{k:"broadcast",l:"📢 Broadcast"}];
   return(
     <div style={{...S.screen,animation:"fadeUp 0.3s ease"}}>
@@ -852,7 +876,8 @@ function AdminScreen({volunteers,setVolunteers,sosToday,lang}){
               </div>
               <div style={{fontSize:11,color:C.gray,marginBottom:8,lineHeight:1.8}}>
                 {vol.roll&&<p style={{margin:0}}>🎓 {vol.roll}</p>}
-                <p style={{margin:0}}>📧 {vol.email}</p><p style={{margin:0}}>📞 {vol.phone}</p>
+                <p style={{margin:0}}>📧 {vol.email}</p>
+                <p style={{margin:0}}>📞 {vol.phone}</p>
                 <p style={{margin:0}}>🏅 Certified: {vol.first_aid_certified?"Yes ✅":"No ❌"}</p>
                 {vol.remarks&&<p style={{margin:0}}>📋 {vol.remarks}</p>}
                 {vol.lat&&<p style={{margin:0,fontFamily:"monospace",fontSize:10}}>📍 {fmtCoord(vol.lat)}, {fmtCoord(vol.lng)}</p>}
@@ -869,15 +894,9 @@ function AdminScreen({volunteers,setVolunteers,sosToday,lang}){
   );
 }
 
-// ── ROOT APP ──────────────────────────────────────────────────────────────
 export default function App(){
-  // In-memory session store (replaces localStorage for artifact)
-  const sessionRef = useRef(null);
-  const sessionStore = {
-    get: () => sessionRef.current,
-    set: (v) => { sessionRef.current = v; }
-  };
-  const userPhoneRef = useRef("");
+  const sessionRef=useRef(null);
+  const sessionStore={get:()=>sessionRef.current,set:(v)=>{sessionRef.current=v;}};
 
   const[lang,setLang]=useState("en");
   const toggleLang=()=>setLang(l=>l==="en"?"ta":"en");
@@ -885,6 +904,7 @@ export default function App(){
   const[screen,setScreen]=useState("home");
   const[userLoc,setUserLoc]=useState(null);
   const[userPhone,setUserPhone]=useState("");
+  const[userName,setUserName]=useState("");
   const[selectedVol,setSelectedVol]=useState(null);
   const[toast,setToast]=useState(null);
   const[badge,setBadge]=useState(0);
@@ -892,34 +912,30 @@ export default function App(){
   const[volunteers,setVolunteers]=useState([]);
   const[sosToday,setSosToday]=useState(0);
   const volIdRef=useRef(null);
+  const userPhoneRef=useRef("");
+  const userNameRef=useRef("");
 
   const refreshVols=useCallback(()=>{db.getVolunteers().then(d=>setVolunteers(d)).catch(()=>{});},[]);
 
   useEffect(()=>{if(step==="app"){refreshVols();const t=setInterval(refreshVols,30000);return()=>clearInterval(t);}},[step,refreshVols]);
 
-  // Live user GPS once in app
   useEffect(()=>{
-    if(step!=="app"||!navigator.geolocation)return;
-    const id=navigator.geolocation.watchPosition(
-      p=>setUserLoc({lat:p.coords.latitude,lng:p.coords.longitude}),
-      null,{enableHighAccuracy:true,maximumAge:30000}
-    );
+    if(step!=="app"||!navigator.geolocation) return;
+    const id=navigator.geolocation.watchPosition(p=>setUserLoc({lat:p.coords.latitude,lng:p.coords.longitude}),null,{enableHighAccuracy:true,maximumAge:30000});
     return()=>navigator.geolocation.clearWatch(id);
   },[step]);
 
-  // Approved volunteer: push GPS to Supabase every 30s
   useEffect(()=>{
-    if(!session?.email||step!=="app"||!navigator.geolocation)return;
+    if(!session?.email||step!=="app"||!navigator.geolocation) return;
     const vol=volunteers.find(v=>v.email===session.email&&v.approved);
-    if(!vol)return;
+    if(!vol) return;
     volIdRef.current=vol.id;
     const wid=navigator.geolocation.watchPosition(
       pos=>{
         const lat=pos.coords.latitude,lng=pos.coords.longitude;
         db.updateVolunteer(volIdRef.current,{lat,lng,online:true,loc_updated_at:new Date().toISOString()}).catch(()=>{});
         setVolunteers(p=>p.map(x=>x.id===volIdRef.current?{...x,lat,lng,loc_updated_at:new Date().toISOString()}:x));
-      },
-      null,{enableHighAccuracy:true,maximumAge:30000}
+      },null,{enableHighAccuracy:true,maximumAge:30000}
     );
     return()=>navigator.geolocation.clearWatch(wid);
   },[session?.email,volunteers.length,step]);
@@ -930,23 +946,30 @@ export default function App(){
     if(l){setToast(l);setTimeout(()=>setToast(null),4500);}
   }),[]);
 
-  function onLocation(loc){setUserLoc(loc);if(userPhoneRef.current){setStep("app");}else{setStep("phone");}}
-  function onPhone(phone){userPhoneRef.current=phone;setUserPhone(phone);setStep("app");}
+  function onLocation(loc){setUserLoc(loc);if(userPhoneRef.current&&userNameRef.current){setStep("app");}else{setStep("phone");}}
+  function onPhone(name,phone){
+    userNameRef.current=name;userPhoneRef.current=phone;
+    setUserName(name);setUserPhone(phone);
+    setStep("app");
+  }
 
   function triggerSOS(){
     const nearby=volunteers.filter(v=>v.approved&&v.online&&v.availability).map(v=>({...v,distance:userLoc&&v.lat?haversine(userLoc.lat,userLoc.lng,parseFloat(v.lat),parseFloat(v.lng)):9999})).filter(v=>v.distance<=CAMPUS_RADIUS_KM*1000).sort((a,b)=>a.distance-b.distance);
     if(!nearby.length){alert("No volunteers nearby. Please call Emergency Contacts!");setScreen("contacts");return;}
-    nearby.forEach(v=>{sendAlert(v,"sos",{userLoc,userPhone});pushVolNotif(v.email,{type:"sos",message:`🚨 SOS nearby! Caller: ${userPhone} · Location: ${fmtCoord(userLoc?.lat)}, ${fmtCoord(userLoc?.lng)}`,volName:v.name,userLoc,userPhone});});
+    nearby.forEach(v=>{
+      sendAlert(v,"sos",{userLoc,userPhone,userName});
+      pushVolNotif(v.email,{type:"sos",message:`🚨 SOS from ${userName||"Someone"}! Call: ${userPhone} · 📍 ${fmtCoord(userLoc?.lat)}, ${fmtCoord(userLoc?.lng)}`,volName:v.name,userLoc,userPhone,userName});
+    });
     playSound("sos");setSosToday(c=>c+1);
-    alert(`🚨 SOS sent to ${nearby.length} AGA volunteer(s) nearby!\nYour number (${userPhone}) has been shared.`);
+    alert(`🚨 SOS sent to ${nearby.length} AGA volunteer(s) nearby!\nYour name (${userName}) and number (${userPhone}) have been shared.`);
   }
 
-  if(step==="location")return<LocationGate onEnable={onLocation} lang={lang} onToggle={toggleLang}/>;
-  if(step==="phone")return(
+  if(step==="location") return <LocationGate onEnable={onLocation} lang={lang} onToggle={toggleLang}/>;
+  if(step==="phone") return(
     <div style={{...S.app,display:"flex",flexDirection:"column"}}>
       <style>{globalCSS}</style>
       <Header lang={lang} onToggle={toggleLang}/>
-      <PhoneGate onSave={onPhone} lang={lang}/>
+      <PhoneGate onSave={onPhone} lang={lang} savedName={userName} savedPhone={userPhone}/>
     </div>
   );
 
