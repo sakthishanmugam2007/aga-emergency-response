@@ -201,4 +201,801 @@ function PhoneGate({onSave,lang}){
 }
 
 // ─── LOCATION GATE ───
-function LocationGate({onEnable,lang,onTo
+function LocationGate({onEnable,lang,onToggle}){
+  const[err,setErr]=useState(false);
+  function tryEnable(){
+    setErr(false);
+    if(!navigator.geolocation){onEnable(CAMPUS_CENTER);return;}
+    navigator.geolocation.getCurrentPosition(
+      pos=>onEnable({lat:pos.coords.latitude,lng:pos.coords.longitude}),
+      ()=>{setErr(true);onEnable(CAMPUS_CENTER);},
+      {enableHighAccuracy:true,timeout:12000}
+    );
+  }
+  return(
+    <div style={{...S.app,display:"flex",flexDirection:"column"}}>
+      <Header lang={lang} onToggle={onToggle}/>
+      <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:52,marginBottom:20}}>🚨</div>
+          <div style={{background:"#7f1d1d",border:`1px solid ${C.red}`,borderRadius:14,padding:20,marginBottom:16}}>
+            <div style={{fontSize:36,marginBottom:10}}>📍</div>
+            <p style={{color:"#fecaca",fontWeight:700,fontSize:15,margin:"0 0 6px"}}>{lang==="ta"?"இருப்பிட அனுமதி தேவை":"Location Access Required"}</p>
+            <p style={{color:"#fca5a5",fontSize:13,margin:0,lineHeight:1.5}}>{lang==="ta"?"AGA அவசர சேவைக்கு உங்கள் இருப்பிடம் தேவை.":"Your location is needed for emergency services."}</p>
+          </div>
+          {err&&<p style={{color:"#fbbf24",fontSize:12,marginBottom:12}}>Location denied — using campus as fallback.</p>}
+          <button style={S.btn(C.gold,C.navy)} onClick={tryEnable}>📍 {lang==="ta"?"இருப்பிடத்தை இயக்கு":"Enable Location"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── HOME ───
+function HomeScreen({userLoc,setScreen,lang,onSOS,volunteers,sosToday}){
+  const approved=volunteers.filter(v=>v.approved);
+  const active=approved.filter(v=>v.online&&v.availability).length;
+  const tiles=[
+    {icon:"🆘",label:lang==="ta"?"அருகிலுள்ள தன்னார்வலர்கள்":"Find Nearby Volunteers",to:"volunteers"},
+    {icon:"📞",label:lang==="ta"?"அவசர தொடர்புகள்":"Emergency Contacts",to:"contacts"},
+    {icon:"🗺️",label:lang==="ta"?"வளாக வரைபடம்":"Campus Map",to:"campusMap"},
+    {icon:"🩺",label:lang==="ta"?"முதலுதவி வழிகாட்டி":"First Aid Guide",to:"guide"},
+    {icon:"👤",label:lang==="ta"?"என் சுயவிவரம்":"My Profile",to:"profile"},
+    {icon:"📝",label:lang==="ta"?"தன்னார்வலராக பதிவு":"Register as Volunteer",to:"login"},
+  ];
+  return(
+    <div style={S.screen}>
+      <button onClick={onSOS} style={{...S.btn(C.red,C.white),fontSize:20,fontWeight:900,padding:"22px 18px",borderRadius:16,boxShadow:"0 0 28px rgba(192,57,43,0.55)",letterSpacing:1,marginBottom:14}}>
+        🚨 {lang==="ta"?"SOS — அவசரம்":"SOS — EMERGENCY"}
+      </button>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
+        {tiles.map(b=>(
+          <button key={b.to} style={{...S.btn(C.navyLight,C.white),marginBottom:0,flexDirection:"column",padding:"14px 8px",gap:4,border:`1px solid ${C.navyLight}`}} onClick={()=>setScreen(b.to)}>
+            <span style={{fontSize:22}}>{b.icon}</span>
+            <span style={{fontSize:11}}>{b.label}</span>
+          </button>
+        ))}
+      </div>
+      <div style={S.sHead}>📊 {lang==="ta"?"டாஷ்போர்டு":"Dashboard"}</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <div style={S.statBox}><p style={{fontSize:24,fontWeight:900,color:C.gold,margin:0}}>{approved.length}</p><p style={{fontSize:10,color:C.gray,margin:"3px 0 0"}}>{lang==="ta"?"மொத்த தன்னார்வலர்கள்":"Total Volunteers"}</p></div>
+        <div style={S.statBox}><p style={{fontSize:24,fontWeight:900,color:C.green,margin:0}}>{active}</p><p style={{fontSize:10,color:C.gray,margin:"3px 0 0"}}>{lang==="ta"?"செயலில் உள்ளவர்கள்":"Active Now"}</p></div>
+        <div style={S.statBox}><p style={{fontSize:24,fontWeight:900,color:C.red,margin:0}}>{sosToday}</p><p style={{fontSize:10,color:C.gray,margin:"3px 0 0"}}>{lang==="ta"?"இன்றைய SOS":"SOS Today"}</p></div>
+        <div style={S.statBox}><p style={{fontSize:24,fontWeight:900,color:C.blue,margin:0}}>{volunteers.length}</p><p style={{fontSize:10,color:C.gray,margin:"3px 0 0"}}>{lang==="ta"?"மொத்த பதிவுகள்":"Total Registered"}</p></div>
+      </div>
+    </div>
+  );
+}
+
+// ─── VOLUNTEERS ───
+function VolunteersScreen({userLoc,setScreen,setSelectedVol,volunteers}){
+  const[filter,setFilter]=useState("all");
+  const withDist=volunteers.filter(v=>v.approved).map(v=>({
+    ...v,distance:userLoc&&v.lat&&v.lng?haversine(userLoc.lat,userLoc.lng,parseFloat(v.lat),parseFloat(v.lng)):9999
+  })).sort((a,b)=>a.distance-b.distance);
+  const nearby=withDist.filter(v=>v.distance<=CAMPUS_RADIUS_KM*1000);
+  const filtered=filter==="available"?withDist.filter(v=>v.availability&&v.online):filter==="certified"?withDist.filter(v=>v.first_aid_certified):withDist;
+  function callVol(vol){window.location.href=`tel:${vol.phone}`;sendAlert(vol,"call",{userLoc});playSound("call");}
+  function viewMap(vol){sendAlert(vol,"map",{userLoc});setSelectedVol(vol);setScreen("map");}
+  return(
+    <div style={S.screen}>
+      <div style={S.sHead}>🆘 {nearby.length>0?`${nearby.length} Volunteers Within 2km`:"All Volunteers"}</div>
+      <p style={{color:C.gray,fontSize:11,marginTop:-8,marginBottom:12}}>Sorted by distance · live GPS · Supabase</p>
+      <div style={{marginBottom:12}}>
+        {["all","available","certified"].map(f=><button key={f} style={S.chip(filter,f)} onClick={()=>setFilter(f)}>{f==="all"?"All":f==="available"?"Available":"Certified"}</button>)}
+      </div>
+      {filtered.length===0&&<div style={{...S.card(),textAlign:"center",padding:28}}><p style={{color:C.gray,fontSize:13}}>No volunteers found.</p></div>}
+      {filtered.map(vol=>(
+        <div key={vol.id} style={S.card(vol.distance<=CAMPUS_RADIUS_KM*1000?C.gold:C.navyLight)}>
+          {vol.distance<=CAMPUS_RADIUS_KM*1000&&<div style={{fontSize:10,color:C.gold,fontWeight:800,marginBottom:4}}>📍 WITHIN 2KM</div>}
+          <div style={{...S.row,marginBottom:8}}>
+            <div style={{width:42,height:42,borderRadius:"50%",background:C.gold,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:15,color:C.navy,flexShrink:0}}>{vol.name?.charAt(0)||"?"}</div>
+            <div style={{flex:1}}>
+              <p style={{fontSize:15,fontWeight:700,color:C.white,margin:0}}>{vol.name}</p>
+              <p style={{fontSize:11,color:C.gray,margin:"2px 0 0"}}>{vol.department||vol.occupation||"—"}{vol.year?` · ${vol.year}`:""}</p>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <p style={{fontSize:20,fontWeight:800,color:vol.distance<=300?C.green:C.gold,margin:0}}>{fmtDist(vol.distance)}</p>
+              <p style={{fontSize:10,color:C.gray}}>away</p>
+            </div>
+          </div>
+          <div style={{background:C.navyLight,borderRadius:8,padding:"5px 10px",marginBottom:8,fontSize:11,color:C.gray,fontFamily:"monospace"}}>
+            📍 {fmtCoord(vol.lat)}, {fmtCoord(vol.lng)}
+            {vol.loc_updated_at&&<span style={{color:C.gold,marginLeft:6,fontSize:10}}>· {new Date(vol.loc_updated_at).toLocaleTimeString()}</span>}
+          </div>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:8}}>
+            <span style={S.badge(vol.online)}>{vol.online?"Online":"Offline"}</span>
+            <span style={S.badge(vol.availability)}>{vol.availability?"Available":"Unavailable"}</span>
+            <span style={S.badge(vol.first_aid_certified)}>{vol.first_aid_certified?"✓ Certified":"Not Certified"}</span>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button style={{...S.btn(C.red,C.white),marginBottom:0,flex:1,padding:"10px 8px",fontSize:13}} onClick={()=>callVol(vol)}>📞 Call Now</button>
+            <button style={{...S.btn(C.navyLight,C.white),marginBottom:0,flex:1,padding:"10px 8px",fontSize:13,border:`1px solid ${C.gray}`}} onClick={()=>viewMap(vol)}>🗺 Map</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── MAP (live polling) ───
+function MapScreen({userLoc,selectedVol,setScreen}){
+  const[myLoc,setMyLoc]=useState(userLoc);
+  const[volLoc,setVolLoc]=useState(selectedVol?{lat:parseFloat(selectedVol.lat||CAMPUS_CENTER.lat),lng:parseFloat(selectedVol.lng||CAMPUS_CENTER.lng)}:null);
+  useEffect(()=>{
+    if(!navigator.geolocation)return;
+    const id=navigator.geolocation.watchPosition(p=>setMyLoc({lat:p.coords.latitude,lng:p.coords.longitude}),null,{enableHighAccuracy:true});
+    return()=>navigator.geolocation.clearWatch(id);
+  },[]);
+  useEffect(()=>{
+    if(!selectedVol?.id)return;
+    const fetch=()=>db.getVolunteers().then(vols=>{const v=vols.find(x=>x.id===selectedVol.id);if(v&&v.lat&&v.lng)setVolLoc({lat:parseFloat(v.lat),lng:parseFloat(v.lng)});}).catch(()=>{});
+    fetch();
+    const t=setInterval(fetch,10000);
+    return()=>clearInterval(t);
+  },[selectedVol?.id]);
+  const vol=selectedVol;
+  if(!vol){setScreen("volunteers");return null;}
+  const uLat=myLoc?.lat||CAMPUS_CENTER.lat,uLng=myLoc?.lng||CAMPUS_CENTER.lng;
+  const vLat=volLoc?.lat||CAMPUS_CENTER.lat,vLng=volLoc?.lng||CAMPUS_CENTER.lng;
+  const dist=haversine(uLat,uLng,vLat,vLng);
+  const deg=bearingDeg(uLat,uLng,vLat,vLng);
+  const osmUrl=`https://www.openstreetmap.org/directions?engine=fossgis_osrm_foot&route=${uLat}%2C${uLng}%3B${vLat}%2C${vLng}`;
+  return(
+    <div style={S.screen}>
+      <button style={{...S.btnSm(C.navyLight,C.white),marginBottom:12}} onClick={()=>setScreen("volunteers")}>← Back</button>
+      <div style={S.sHead}>🗺 Volunteer Live Location</div>
+      <div style={{...S.card(C.gold),marginBottom:10}}>
+        <div style={S.row}>
+          <div style={{width:38,height:38,borderRadius:"50%",background:C.gold,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,color:C.navy}}>{vol.name?.charAt(0)}</div>
+          <div style={{flex:1}}><p style={{fontSize:15,fontWeight:700,color:C.white,margin:0}}>{vol.name}</p><p style={{fontSize:11,color:C.gray,margin:0}}>{vol.department||vol.occupation}</p></div>
+          <div style={{width:8,height:8,borderRadius:"50%",background:C.green,boxShadow:`0 0 6px ${C.green}`}}/>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:8,marginBottom:8}}>
+        <div style={{...S.statBox,flex:1}}><p style={{color:C.gold,fontWeight:800,fontSize:20,margin:0}}>{fmtDist(dist)}</p><p style={{color:C.gray,fontSize:10,margin:0}}>Distance</p></div>
+        <div style={{...S.statBox,flex:1}}><p style={{color:C.gold,fontWeight:800,fontSize:20,margin:0}}>~{Math.max(1,Math.round(dist/80))} min</p><p style={{color:C.gray,fontSize:10,margin:0}}>Walk</p></div>
+      </div>
+      <div style={{...S.card(),marginBottom:8,fontSize:11,fontFamily:"monospace",lineHeight:1.8}}>
+        <div style={{color:C.blue}}>📍 You: {fmtCoord(uLat)}, {fmtCoord(uLng)}</div>
+        <div style={{color:C.gold}}>🎯 {vol.name?.split(" ")[0]}: {fmtCoord(vLat)}, {fmtCoord(vLng)}</div>
+        <div style={{color:C.gray,fontSize:10}}>↻ Updates every 10s</div>
+      </div>
+      <div style={{background:C.navyLight,borderRadius:12,height:170,marginBottom:10,position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",inset:0,backgroundImage:"radial-gradient(circle, rgba(212,160,23,0.1) 1px, transparent 1px)",backgroundSize:"16px 16px"}}/>
+        {[1,2,3].map(r=><div key={r} style={{position:"absolute",top:"50%",left:"50%",width:r*52,height:r*52,marginLeft:-(r*26),marginTop:-(r*26),border:`1px solid rgba(148,163,184,${0.25-r*0.06})`,borderRadius:"50%"}}/>)}
+        <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",textAlign:"center"}}>
+          <div style={{width:12,height:12,borderRadius:"50%",background:C.blue,border:`2px solid ${C.white}`,margin:"0 auto"}}/>
+          <p style={{fontSize:9,color:C.blue,margin:"2px 0 0",fontWeight:700}}>You</p>
+        </div>
+        <div style={{position:"absolute",top:"50%",left:"50%",transform:`rotate(${deg}deg) translateY(-68px) rotate(${-deg}deg) translate(-50%,-50%)`,textAlign:"center"}}>
+          <div style={{width:14,height:14,borderRadius:"50%",background:C.gold,border:`2px solid ${C.navy}`,margin:"0 auto",boxShadow:`0 0 8px ${C.gold}`}}/>
+          <p style={{fontSize:9,color:C.gold,fontWeight:700,margin:"2px 0 0",whiteSpace:"nowrap"}}>{vol.name?.split(" ")[0]}</p>
+        </div>
+      </div>
+      <button style={S.btn(C.gold,C.navy)} onClick={()=>window.open(osmUrl,"_blank")}>🧭 Navigate (OpenStreetMap)</button>
+      <button style={S.btn(C.red,C.white)} onClick={()=>window.open(`tel:${vol.phone}`,"_self")}>📞 Call {vol.name?.split(" ")[0]}</button>
+    </div>
+  );
+}
+
+// ─── CAMPUS MAP ───
+function CampusMapScreen({setScreen}){
+  const bbox=`${CAMPUS_CENTER.lng-0.006},${CAMPUS_CENTER.lat-0.004},${CAMPUS_CENTER.lng+0.006},${CAMPUS_CENTER.lat+0.004}`;
+  return(
+    <div style={S.screen}>
+      <button style={{...S.btnSm(C.navyLight,C.white),marginBottom:12}} onClick={()=>setScreen("home")}>← Back</button>
+      <div style={S.sHead}>🗺️ Campus Map — PSG CAS</div>
+      <p style={{color:C.gray,fontSize:11,marginTop:-8,marginBottom:10}}>Near SITRA Junction, Avinashi Road, Coimbatore 641014</p>
+      <div style={{borderRadius:12,overflow:"hidden",marginBottom:10,border:`1px solid ${C.gold}`}}>
+        <iframe title="map" width="100%" height="230" style={{border:0,display:"block"}} src={`https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${CAMPUS_CENTER.lat},${CAMPUS_CENTER.lng}`}/>
+      </div>
+      <button style={S.btn(C.gold,C.navy)} onClick={()=>window.open(`https://www.openstreetmap.org/?mlat=${CAMPUS_CENTER.lat}&mlon=${CAMPUS_CENTER.lng}#map=17/${CAMPUS_CENTER.lat}/${CAMPUS_CENTER.lng}`,"_blank")}>🌍 Open Full Map</button>
+      <div style={S.sHead}>📍 Key Locations</div>
+      {CAMPUS_LANDMARKS.map(loc=>(
+        <div key={loc.name} style={{...S.card(),display:"flex",alignItems:"center",gap:12}}>
+          <span style={{fontSize:22}}>{loc.icon}</span>
+          <div style={{flex:1}}><p style={{fontSize:14,fontWeight:700,color:C.white,margin:0}}>{loc.name}</p><p style={{fontSize:11,color:C.gray,margin:0,fontFamily:"monospace"}}>{fmtCoord(loc.lat)}, {fmtCoord(loc.lng)}</p></div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── FIRST AID GUIDE ───
+function GuideScreen({setScreen,lang,canEdit=false}){
+  const[guideEn,setGuideEn]=useState(loadGuideEn);
+  const[guideTa,setGuideTa]=useState(loadGuideTa);
+  const[selected,setSelected]=useState(null);
+  const[editing,setEditing]=useState(null);
+  const[editForm,setEditForm]=useState({title:"",steps:""});
+  const items=lang==="ta"?guideTa:guideEn;
+  function startEdit(item,eLang){
+    const src=eLang==="en"?guideEn:guideTa;
+    const found=src.find(x=>x.id===item.id)||item;
+    setEditing({...found,eLang});
+    setEditForm({title:found.title,steps:found.steps.join("\n")});
+    setSelected(null);
+  }
+  function saveEdit(){
+    const stepsArr=editForm.steps.split("\n").map(s=>s.trim()).filter(Boolean);
+    if(editing.eLang==="en"){const u=guideEn.map(x=>x.id===editing.id?{...x,title:editForm.title,steps:stepsArr}:x);setGuideEn(u);saveGuideEn(u);}
+    else{const u=guideTa.map(x=>x.id===editing.id?{...x,title:editForm.title,steps:stepsArr}:x);setGuideTa(u);saveGuideTa(u);}
+    setEditing(null);
+  }
+  if(selected!==null){
+    const item=items[selected];
+    return(
+      <div style={S.screen}>
+        <button style={{...S.btnSm(C.navyLight,C.white),marginBottom:12}} onClick={()=>setSelected(null)}>← Back</button>
+        <div style={{...S.card(C.gold),marginBottom:12}}>
+          <p style={{fontSize:28,margin:"0 0 6px"}}>{item.icon}</p>
+          <p style={{fontSize:16,fontWeight:800,color:C.gold,margin:"0 0 12px"}}>{item.title}</p>
+          {item.steps.map((step,i)=>(
+            <div key={i} style={{display:"flex",gap:12,marginBottom:10,alignItems:"flex-start"}}>
+              <div style={{width:22,height:22,borderRadius:"50%",background:C.gold,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:11,color:C.navy,flexShrink:0}}>{i+1}</div>
+              <p style={{color:C.white,fontSize:13,margin:0,lineHeight:1.6}}>{step}</p>
+            </div>
+          ))}
+        </div>
+        {canEdit&&(
+          <div style={{display:"flex",gap:8,marginBottom:10}}>
+            <button style={{...S.btn(C.navyLight,C.white),marginBottom:0,flex:1,fontSize:12}} onClick={()=>startEdit(item,"en")}>✏️ Edit English</button>
+            <button style={{...S.btn(C.navyLight,C.gold),marginBottom:0,flex:1,fontSize:12,border:`1px solid ${C.gold}`}} onClick={()=>startEdit(item,"ta")}>✏️ தமிழ் திருத்து</button>
+          </div>
+        )}
+        <button style={S.btn(C.red,C.white)} onClick={()=>window.open("tel:108","_self")}>🚑 Call Ambulance 108</button>
+      </div>
+    );
+  }
+  return(
+    <div style={S.screen}>
+      {!canEdit&&<button style={{...S.btnSm(C.navyLight,C.white),marginBottom:12}} onClick={()=>setScreen("home")}>← Back</button>}
+      <div style={S.sHead}>🩺 {lang==="ta"?"முதலுதவி வழிகாட்டி":"First Aid Guide"}</div>
+      <div style={{...S.card(),marginBottom:10,background:"#1a2d1a",border:`1px solid ${C.green}`}}>
+        <p style={{color:"#86efac",fontSize:12,margin:0}}>⚠️ {lang==="ta"?"உண்மையான அவசரநிலையில் 108 அழைக்கவும்.":"Always call 108 in a real emergency."}</p>
+      </div>
+      {items.map((item,i)=>(
+        <button key={item.id} style={{...S.card(),width:"100%",textAlign:"left",cursor:"pointer",display:"flex",alignItems:"center",gap:12}} onClick={()=>setSelected(i)}>
+          <span style={{fontSize:24,flexShrink:0}}>{item.icon}</span>
+          <div style={{flex:1}}>
+            <p style={{fontSize:14,fontWeight:700,color:C.white,margin:0}}>{item.title}</p>
+            <p style={{fontSize:11,color:C.gray,margin:"2px 0 0"}}>{item.steps.length} {lang==="ta"?"படிகள்":"steps"}</p>
+          </div>
+          <span style={{color:C.gold,fontSize:16}}>›</span>
+        </button>
+      ))}
+      {editing&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"flex-start",justifyContent:"center",zIndex:500,padding:16,overflowY:"auto"}}>
+          <div style={{background:C.navyMid,borderRadius:14,padding:20,width:"100%",maxWidth:380,marginTop:16}}>
+            <p style={{color:C.white,fontWeight:700,fontSize:15,marginBottom:4}}>✏️ Edit {editing.eLang==="en"?"English 🇬🇧":"Tamil 🇮🇳"}</p>
+            <p style={{color:C.gray,fontSize:11,marginBottom:12}}>Only {editing.eLang==="en"?"English":"Tamil"} content is changed.</p>
+            <span style={S.label}>Title</span>
+            <input style={S.input} value={editForm.title} onChange={e=>setEditForm(p=>({...p,title:e.target.value}))}/>
+            <span style={S.label}>Steps — one per line</span>
+            <textarea style={{...S.input,minHeight:160,resize:"vertical",fontFamily:"inherit",fontSize:12}} value={editForm.steps} onChange={e=>setEditForm(p=>({...p,steps:e.target.value}))}/>
+            <div style={{display:"flex",gap:8}}>
+              <button style={{...S.btn(C.navyLight,C.white),marginBottom:0,flex:1}} onClick={()=>setEditing(null)}>Cancel</button>
+              <button style={{...S.btn(C.gold,C.navy),marginBottom:0,flex:1}} onClick={saveEdit}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── CONTACTS ───
+function ContactsScreen({canEdit=false,setScreen}){
+  const[contacts,setContacts]=useState(loadContacts);
+  const[editKey,setEditKey]=useState(null);
+  const[ef,setEf]=useState({icon:"",label:"",number:"",desc:""});
+  const[adding,setAdding]=useState(false);
+  function persist(next){setContacts(next);saveContacts(next);}
+  function save(){if(!ef.label||!ef.number)return;adding?persist([...contacts,{key:`c-${Date.now()}`,icon:ef.icon||"📞",label:ef.label,number:ef.number,desc:ef.desc}]):persist(contacts.map(c=>c.key===editKey?{...c,...ef}:c));setEditKey(null);}
+  return(
+    <div style={S.screen}>
+      {!canEdit&&<button style={{...S.btnSm(C.navyLight,C.white),marginBottom:12}} onClick={()=>setScreen("home")}>← Back</button>}
+      <div style={S.sHead}>📞 Emergency Contacts</div>
+      {contacts.map(c=>(
+        <div key={c.key} style={{background:C.red,borderRadius:12,padding:"13px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:22,cursor:"pointer"}} onClick={()=>window.open(`tel:${c.number}`,"_self")}>{c.icon}</span>
+          <div style={{flex:1,cursor:"pointer"}} onClick={()=>window.open(`tel:${c.number}`,"_self")}>
+            <p style={{fontSize:14,fontWeight:700,color:C.white,margin:0}}>{c.label}</p>
+            <p style={{fontSize:11,color:"#fecaca",margin:0}}>{c.desc}</p>
+          </div>
+          <div style={{cursor:"pointer",textAlign:"right"}} onClick={()=>window.open(`tel:${c.number}`,"_self")}>
+            <p style={{fontSize:13,color:"#fecaca",fontWeight:800,margin:0}}>{c.number}</p>
+            <p style={{fontSize:9,color:"#fca5a5",margin:0}}>Tap to call</p>
+          </div>
+          {canEdit&&(
+            <div style={{display:"flex",gap:4}}>
+              <button style={{background:"rgba(0,0,0,0.25)",border:"none",borderRadius:6,padding:6,cursor:"pointer",color:C.white,fontSize:12}} onClick={()=>{setEditKey(c.key);setEf({icon:c.icon,label:c.label,number:c.number,desc:c.desc});setAdding(false);}}>✏️</button>
+              <button style={{background:"rgba(0,0,0,0.25)",border:"none",borderRadius:6,padding:6,cursor:"pointer",color:C.white,fontSize:12}} onClick={()=>{if(window.confirm("Remove?"))persist(contacts.filter(x=>x.key!==c.key));}}>🗑️</button>
+            </div>
+          )}
+        </div>
+      ))}
+      {canEdit&&<button style={S.btn(C.navyLight,C.white)} onClick={()=>{setEditKey("__new__");setEf({icon:"📞",label:"",number:"",desc:""});setAdding(true);}}>➕ Add Contact</button>}
+      {canEdit&&editKey&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:999,padding:20}}>
+          <div style={{background:C.navyMid,borderRadius:14,padding:20,width:"100%",maxWidth:340}}>
+            <p style={{color:C.white,fontWeight:700,fontSize:15,marginBottom:12}}>{adding?"Add":"Edit"} Contact</p>
+            {[["Icon","icon"],["Label","label"],["Phone","number"],["Description","desc"]].map(([l,k])=>(
+              <div key={k}><span style={S.label}>{l}</span><input style={S.input} value={ef[k]} onChange={e=>setEf(x=>({...x,[k]:e.target.value}))}/></div>
+            ))}
+            <div style={{display:"flex",gap:8}}>
+              <button style={{...S.btn(C.navyLight,C.white),marginBottom:0,flex:1}} onClick={()=>setEditKey(null)}>Cancel</button>
+              <button style={{...S.btn(C.gold,C.navy),marginBottom:0,flex:1}} onClick={save}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── LOGIN ───
+function LoginScreen({onLoggedIn,setScreen}){
+  const[email,setEmail]=useState("");const[err,setErr]=useState("");
+  function handle(){
+    const t=email.trim().toLowerCase();
+    if(!t.includes("@")||!t.includes(".")){setErr("Enter a valid email.");return;}
+    const existing=loadSession();
+    const profile=(existing&&existing.email===t)?existing:{email:t,registered:false,name:"",approved:false};
+    saveSession(profile);onLoggedIn(profile);
+  }
+  return(
+    <div style={S.screen}>
+      <button style={{...S.btnSm(C.navyLight,C.white),marginBottom:12}} onClick={()=>setScreen("home")}>← Back</button>
+      <div style={S.sHead}>🔑 Volunteer Login</div>
+      <div style={{...S.card(),marginBottom:12}}><p style={{color:C.gray,fontSize:12,margin:0,lineHeight:1.6}}>Your profile is saved permanently in Supabase. Log in anytime to restore everything.</p></div>
+      <button style={{...S.btn("#ffffff","#111"),border:`1px solid ${C.gray}`,marginBottom:12}} onClick={()=>alert("Google Sign-In requires Firebase setup. Please use email login for now.")}>
+        <span style={{fontSize:16}}>🔵</span> Continue with Google
+      </button>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+        <div style={{flex:1,height:1,background:C.navyLight}}/><span style={{color:C.gray,fontSize:12}}>OR</span><div style={{flex:1,height:1,background:C.navyLight}}/>
+      </div>
+      <span style={S.label}>Email ID</span>
+      <input style={S.input} type="email" placeholder="yourname@psgcas.edu.in" value={email} onChange={e=>{setEmail(e.target.value);setErr("");}}/>
+      {err&&<p style={S.err}>{err}</p>}
+      <button style={S.btn(C.gold,C.navy)} onClick={handle}>Continue with Email →</button>
+    </div>
+  );
+}
+
+// ─── PROFILE ───
+function ProfileScreen({session,setScreen,volunteers,setVolunteers,onSessionUpdate,lang}){
+  const vol=session?volunteers.find(v=>v.email===session.email):null;
+  const[editing,setEditing]=useState(false);
+  const[saving,setSaving]=useState(false);
+  const[form,setForm]=useState({name:vol?.name||"",phone:vol?.phone||"",department:vol?.department||"",year:vol?.year||"",occupation:vol?.occupation||"",remarks:vol?.remarks||""});
+  if(!session)return(
+    <div style={S.screen}>
+      <div style={{...S.card(),textAlign:"center",padding:32}}>
+        <p style={{fontSize:32,margin:"0 0 12px"}}>👤</p>
+        <p style={{color:C.gray,fontSize:13,marginBottom:14}}>{lang==="ta"?"உள்நுழையவும்.":"Please login to view your profile."}</p>
+        <button style={S.btn(C.gold,C.navy)} onClick={()=>setScreen("login")}>Login / Register</button>
+      </div>
+    </div>
+  );
+  if(!vol)return(
+    <div style={S.screen}>
+      <div style={{...S.card(),textAlign:"center",padding:32}}>
+        <p style={{fontSize:32,margin:"0 0 12px"}}>📝</p>
+        <p style={{color:C.gray,fontSize:13,marginBottom:6}}>{lang==="ta"?"தன்னார்வலராக பதிவு செய்யவில்லை.":"Not registered as volunteer yet."}</p>
+        <p style={{color:C.gold,fontSize:12,marginBottom:14}}>{session.email}</p>
+        <button style={S.btn(C.gold,C.navy)} onClick={()=>setScreen("register")}>Register Now</button>
+        <button style={{...S.btn(C.navyLight,C.white),marginTop:4}} onClick={()=>{saveSession(null);onSessionUpdate(null);setScreen("home");}}>🚪 Logout</button>
+      </div>
+    </div>
+  );
+  const isOnline=vol.online&&vol.availability;
+  async function toggleAvail(){
+    setSaving(true);
+    try{const u={online:!vol.online,availability:!vol.availability};await db.updateVolunteer(vol.id,u);setVolunteers(p=>p.map(v=>v.id===vol.id?{...v,...u}:v));}
+    catch(e){alert(e.message);}
+    setSaving(false);
+  }
+  async function saveEdit(){
+    setSaving(true);
+    try{await db.updateVolunteer(vol.id,form);setVolunteers(p=>p.map(v=>v.id===vol.id?{...v,...form}:v));const s={...session,name:form.name};saveSession(s);onSessionUpdate(s);setEditing(false);}
+    catch(e){alert(e.message);}
+    setSaving(false);
+  }
+  return(
+    <div style={S.screen}>
+      <div style={S.sHead}>👤 My Profile</div>
+      <div style={{...S.card(C.gold),marginBottom:10}}>
+        <div style={{...S.row,marginBottom:10}}>
+          <div style={{width:48,height:48,borderRadius:"50%",background:C.gold,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:20,color:C.navy,flexShrink:0}}>{vol.name?.charAt(0)||"?"}</div>
+          <div style={{flex:1}}><p style={{fontSize:16,fontWeight:800,color:C.white,margin:0}}>{vol.name}</p><p style={{fontSize:11,color:C.gray,margin:"2px 0 0"}}>{vol.email}</p></div>
+          <span style={S.badge(vol.approved)}>{vol.approved?"✅ Approved":"⏳ Pending"}</span>
+        </div>
+        <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap"}}>
+          <span style={S.badge(isOnline)}>{isOnline?"🟢 Online":"🔴 Offline"}</span>
+          <span style={S.badge(vol.first_aid_certified)}>{vol.first_aid_certified?"🏅 Certified":"Not Certified"}</span>
+        </div>
+        <button style={{...S.btn(isOnline?"#14532d":"#1a3a1a","#86efac"),marginBottom:0,border:`1px solid ${isOnline?C.green:"#166534"}`}} onClick={toggleAvail} disabled={saving}>
+          {saving?"Saving...":(isOnline?"🟢 Mark as Unavailable":"🔴 Mark as Available")}
+        </button>
+      </div>
+      <button style={{...S.btn(C.navyLight,C.white),border:`1px solid ${C.navyLight}`}} onClick={()=>setScreen("myAlerts")}>🔔 View My Notifications</button>
+      {!editing?(
+        <div style={S.card()}>
+          {[["📞 Phone",vol.phone],["🏢 Department",vol.department],["📅 Year",vol.year],["💼 Occupation",vol.occupation],["🏅 First Aid Trained",vol.first_aid_trained?"Yes":"No"],["📋 Training Details",vol.remarks]].map(([l,v])=>v?(
+            <div key={l} style={{marginBottom:8}}><span style={{...S.label,marginTop:0}}>{l}</span><p style={{color:C.white,fontSize:13,margin:0}}>{v}</p></div>
+          ):null)}
+          <button style={{...S.btn(C.navyLight,C.white),marginBottom:0,marginTop:10}} onClick={()=>setEditing(true)}>✏️ Edit My Details</button>
+        </div>
+      ):(
+        <div style={S.card()}>
+          <p style={{color:C.gold,fontWeight:700,fontSize:13,marginBottom:12}}>Edit Your Details</p>
+          {[["Name","name","text"],["Phone","phone","tel"],["Department","department","text"],["Year","year","text"],["Occupation","occupation","text"],["Training Details","remarks","text"]].map(([l,k,t])=>(
+            <div key={k}><span style={S.label}>{l}</span><input style={S.input} type={t} value={form[k]} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))}/></div>
+          ))}
+          <div style={{display:"flex",gap:8}}>
+            <button style={{...S.btn(C.navyLight,C.white),marginBottom:0,flex:1}} onClick={()=>setEditing(false)}>Cancel</button>
+            <button style={{...S.btn(C.gold,C.navy),marginBottom:0,flex:1}} onClick={saveEdit} disabled={saving}>{saving?"Saving...":"Save Changes"}</button>
+          </div>
+        </div>
+      )}
+      <button style={{...S.btn(C.navyLight,C.white),marginTop:4,border:`1px solid ${C.red}`,color:"#fca5a5"}} onClick={()=>{saveSession(null);onSessionUpdate(null);setScreen("home");}}>🚪 Logout</button>
+    </div>
+  );
+}
+
+// ─── REGISTER ───
+function RegisterScreen({setScreen,session,onRegistered,userLoc,lang}){
+  const[form,setForm]=useState({name:session?.name||"",email:session?.email||"",roll:"",phone:"",department:"",year:"",occupation:"",first_aid_trained:null,first_aid_certified:null,remarks:""});
+  const[done,setDone]=useState(false);const[loading,setLoading]=useState(false);const[errs,setErrs]=useState({});
+  function upd(k,v){setForm(p=>({...p,[k]:v}));setErrs(p=>({...p,[k]:null}));}
+  function validate(){const e={};if(!form.name.trim())e.name="Required";if(!form.email.includes("@"))e.email="Valid email required";if(!form.phone.trim())e.phone="Required";if(!form.remarks.trim())e.remarks="Required";if(form.first_aid_certified===null)e.cert="Required";setErrs(e);return Object.keys(e).length===0;}
+  async function submit(){
+    if(!validate())return;setLoading(true);
+    try{
+      await db.addVolunteer({name:form.name,roll:form.roll,email:form.email,phone:form.phone,department:form.department,year:form.year,occupation:form.occupation,first_aid_trained:form.first_aid_trained||false,first_aid_certified:form.first_aid_certified||false,remarks:form.remarks,approved:false,online:false,availability:true,lat:userLoc?.lat||CAMPUS_CENTER.lat,lng:userLoc?.lng||CAMPUS_CENTER.lng});
+      const p={...session,registered:true,approved:false,name:form.name};
+      saveSession(p);
+      pushVolNotif(form.email,{type:"registered",message:"📝 Registration submitted! Admin will review soon.",volName:form.name});
+      playSound("call");
+      onRegistered(p);setDone(true);
+    }catch(e){alert("Error: "+e.message);}
+    setLoading(false);
+  }
+  function YN({value,onChange,error}){return<div style={{marginBottom:10}}>{[true,false].map(v=><button key={String(v)} style={S.chip(value,v)} onClick={()=>onChange(v)}>{v?(lang==="ta"?"ஆம்":"Yes"):(lang==="ta"?"இல்லை":"No")}</button>)}{error&&<p style={S.err}>{error}</p>}</div>;}
+  if(done)return(
+    <div style={{...S.screen,textAlign:"center"}}>
+      <div style={{fontSize:60,marginBottom:14}}>✅</div>
+      <p style={{color:C.gold,fontSize:20,fontWeight:800,marginBottom:8}}>Application Submitted!</p>
+      <div style={{...S.card(),background:"#1a2d1a",border:`1px solid ${C.green}`,textAlign:"left",marginBottom:14}}>
+        <p style={{color:"#86efac",fontWeight:700,margin:"0 0 4px"}}>✅ Saved to Supabase</p>
+        <p style={{color:C.gray,fontSize:12,margin:0}}>Admin will approve your application. Check My Notifications for updates.</p>
+      </div>
+      <button style={S.btn(C.gold,C.navy)} onClick={()=>setScreen("myAlerts")}>🔔 View My Notifications</button>
+      <button style={{...S.btn(C.navyLight,C.white)}} onClick={()=>setScreen("home")}>Back to Home</button>
+    </div>
+  );
+  return(
+    <div style={S.screen}>
+      <div style={S.sHead}>📝 {lang==="ta"?"தன்னார்வலர் பதிவு":"Volunteer Registration"}</div>
+      <div style={{...S.card(),background:"#1a2d1a",border:`1px solid ${C.green}`,marginBottom:12}}>
+        <p style={{color:"#86efac",fontSize:12,margin:0}}>✅ Data saved permanently to Supabase. Admin approval required.</p>
+      </div>
+      {[["Full Name *","name","text","e.g. Karthik R"],["Roll Number (optional)","roll","text","e.g. 23CS101"],["Email *","email","email","yourname@psgcas.edu.in"],["Phone *","phone","tel","+91 9XXXXXXXXX"],["Department (optional)","department","text","e.g. Computer Science"],["Year of Study (optional)","year","text","e.g. 2nd Year"],["Occupation (optional)","occupation","text","Student / Doctor / Faculty / Staff"]].map(([l,k,t,p])=>(
+        <div key={k}><span style={S.label}>{l}</span><input style={S.input} type={t} value={form[k]} onChange={e=>upd(k,e.target.value)} placeholder={p}/>{errs[k]&&<p style={S.err}>{errs[k]}</p>}</div>
+      ))}
+      <span style={S.label}>First Aid Training Completed?</span>
+      <YN value={form.first_aid_trained} onChange={v=>upd("first_aid_trained",v)}/>
+      <span style={S.label}>First Aid Certificate? *</span>
+      <YN value={form.first_aid_certified} onChange={v=>upd("first_aid_certified",v)} error={errs.cert}/>
+      <span style={S.label}>Training Details * (course, year, institute)</span>
+      <input style={S.input} value={form.remarks} onChange={e=>upd("remarks",e.target.value)} placeholder="e.g. Red Cross Basic First Aid, 2024"/>
+      {errs.remarks&&<p style={S.err}>{errs.remarks}</p>}
+      <button style={S.btn(C.gold,C.navy)} onClick={submit} disabled={loading}>{loading?"Saving to Supabase...":"Submit Application"}</button>
+      <button style={S.btn(C.navyLight,C.white)} onClick={()=>setScreen("home")}>Cancel</button>
+    </div>
+  );
+}
+
+// ─── MY ALERTS ───
+function MyAlertsScreen({session,lang}){
+  const email=session?.email;
+  const[notifs,setNotifs]=useState(()=>email?getVolNotifs(email):[]);
+  useEffect(()=>{
+    if(!email)return;
+    const t=setInterval(()=>setNotifs([...getVolNotifs(email)]),3000);
+    return()=>clearInterval(t);
+  },[email]);
+  function markRead(id){const u=notifs.map(n=>n.id===id?{...n,read:true}:n);setNotifs(u);if(email)saveVolNotifs(email,u);}
+  function clearAll(){setNotifs([]);if(email)saveVolNotifs(email,[]);}
+  const iconFor=t=>({call:"📞",map:"🗺",sos:"🚨",approved:"✅",rejected:"❌",broadcast:"📢",registered:"📝"}[t]||"🔔");
+  const unread=notifs.filter(n=>!n.read).length;
+  if(!email)return(
+    <div style={S.screen}>
+      <div style={S.sHead}>🔔 {lang==="ta"?"என் விழிப்பூட்டல்கள்":"My Notifications"}</div>
+      <div style={{...S.card(),textAlign:"center",padding:32}}><p style={{fontSize:32,margin:"0 0 10px"}}>🔒</p><p style={{color:C.gray,fontSize:13}}>Login to see notifications.</p></div>
+    </div>
+  );
+  return(
+    <div style={S.screen}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div style={S.sHead}>🔔 {lang==="ta"?"என் விழிப்பூட்டல்கள்":"My Notifications"}</div>
+        {notifs.length>0&&<button style={S.btnSm(C.navyLight,C.gray)} onClick={clearAll}>Clear All</button>}
+      </div>
+      {unread>0&&<div style={{...S.card(C.gold),marginBottom:8,textAlign:"center"}}><p style={{color:C.gold,fontWeight:800,fontSize:13,margin:0}}>🔔 {unread} unread notification{unread>1?"s":""}</p></div>}
+      <div style={{...S.card(),marginBottom:10,fontSize:11,display:"flex",gap:8,alignItems:"center"}}>
+        <span style={{color:C.gold,fontWeight:700}}>📧 {email}</span>
+        <span style={{color:C.gray}}>· refreshes every 3s</span>
+      </div>
+      {notifs.length===0&&<div style={{...S.card(),textAlign:"center",padding:28}}><p style={{fontSize:32,margin:"0 0 8px"}}>🔔</p><p style={{color:C.gray,fontSize:13}}>No notifications yet.</p></div>}
+      {notifs.map(n=>(
+        <div key={n.id} onClick={()=>markRead(n.id)} style={{...S.card(n.type==="sos"||n.type==="call"?C.red:n.type==="approved"?C.green:C.gold),background:n.read?C.navyMid:n.type==="sos"?"#2d0a0a":n.type==="approved"?"#052e16":"#1a1400",cursor:"pointer",marginBottom:8}}>
+          <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+            <span style={{fontSize:20,flexShrink:0}}>{iconFor(n.type)}</span>
+            <div style={{flex:1}}>
+              {!n.read&&<span style={{fontSize:9,background:C.red,color:C.white,padding:"1px 6px",borderRadius:10,fontWeight:800,display:"inline-block",marginBottom:2}}>NEW</span>}
+              <p style={{color:C.white,fontSize:13,margin:"2px 0",fontWeight:n.read?400:600}}>{n.message}</p>
+              {n.userLoc&&<p style={{color:"#fbbf24",fontSize:10,margin:"0 0 2px",fontFamily:"monospace"}}>📍 {fmtCoord(n.userLoc.lat)}, {fmtCoord(n.userLoc.lng)}</p>}
+              {n.userPhone&&<p style={{color:"#86efac",fontSize:11,margin:"0 0 2px",fontWeight:700}}>📞 Caller: {n.userPhone}</p>}
+              <p style={{color:C.gray,fontSize:10,margin:0}}>{n.time}</p>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── ADMIN ALERTS ───
+function AdminAlerts(){
+  const[alerts,setAlerts]=useState([...gAlerts]);
+  useEffect(()=>subAlerts(a=>setAlerts([...a])),[]);
+  const icon=t=>({call:"📞",map:"🗺",sos:"🚨",approved:"✅",rejected:"❌",broadcast:"📢",registered:"📝"}[t]||"🔔");
+  if(!alerts.length)return<div style={{...S.card(),textAlign:"center",padding:28}}><p style={{fontSize:28,margin:"0 0 8px"}}>🔔</p><p style={{color:C.gray,fontSize:13}}>No alerts yet.</p></div>;
+  return(
+    <div>
+      {alerts.map(a=>(
+        <div key={a.id} style={{...S.card(a.type==="sos"||a.type==="call"?C.red:C.gold),background:a.read?C.navyMid:a.type==="sos"?"#2d0a0a":"#1a1400",cursor:"pointer",marginBottom:8}} onClick={()=>setAlerts(p=>p.map(x=>x.id===a.id?{...x,read:true}:x))}>
+          <div style={S.row}>
+            <span style={{fontSize:20}}>{icon(a.type)}</span>
+            <div style={{flex:1}}>
+              {!a.read&&<span style={{fontSize:9,background:C.red,color:C.white,padding:"1px 6px",borderRadius:10,fontWeight:800}}>NEW</span>}
+              <p style={{color:C.white,fontSize:12,margin:"3px 0"}}>{a.message}</p>
+              {a.userPhone&&<p style={{color:"#86efac",fontSize:11,margin:"0 0 2px",fontWeight:700}}>📞 User: {a.userPhone}</p>}
+              {a.userLoc&&<p style={{color:"#fbbf24",fontSize:10,margin:"0 0 2px",fontFamily:"monospace"}}>📍 {fmtCoord(a.userLoc.lat)}, {fmtCoord(a.userLoc.lng)}</p>}
+              <p style={{color:C.gray,fontSize:10,margin:0}}>{a.volName} · {a.time}</p>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── ADMIN ───
+function AdminScreen({volunteers,setVolunteers,sosToday,lang}){
+  const[tab,setTab]=useState("alerts");const[pin,setPin]=useState("");const[unlocked,setUnlocked]=useState(false);
+  const[badge,setBadge]=useState(0);const[bcast,setBcast]=useState("");const[busy,setBusy]=useState(false);
+  useEffect(()=>subAlerts(a=>setBadge(a.filter(x=>!x.read).length)),[]);
+  if(!unlocked)return(
+    <div style={S.screen}>
+      <div style={S.sHead}>🔐 Admin Access</div>
+      <div style={{...S.card(),textAlign:"center",padding:28}}>
+        <p style={{color:C.gray,fontSize:13,marginBottom:14}}>Enter admin code to unlock</p>
+        <input style={{...S.input,textAlign:"center",letterSpacing:2}} type="password" value={pin} onChange={e=>setPin(e.target.value)} placeholder="Admin code" onKeyDown={e=>e.key==="Enter"&&(pin===ADMIN_PIN?setUnlocked(true):alert("Invalid code."))}/>
+        <button style={S.btn(C.gold,C.navy)} onClick={()=>{if(pin===ADMIN_PIN)setUnlocked(true);else alert("Invalid admin code.");}}>Unlock Dashboard</button>
+      </div>
+    </div>
+  );
+  const pending=volunteers.filter(v=>!v.approved),approved=volunteers.filter(v=>v.approved);
+  async function approve(vol){
+    setBusy(true);
+    try{
+      await db.updateVolunteer(vol.id,{approved:true,online:true,availability:true});
+      setVolunteers(p=>p.map(v=>v.id===vol.id?{...v,approved:true,online:true,availability:true}:v));
+      sendAlert(vol,"approved");
+      if(vol.email)pushVolNotif(vol.email,{type:"approved",message:"✅ Your application has been approved! You are now live as a volunteer.",volName:vol.name});
+      playSound("call");
+    }catch(e){alert(e.message);}
+    setBusy(false);
+  }
+  async function reject(vol){
+    if(!window.confirm(`Reject ${vol.name}?`))return;setBusy(true);
+    try{
+      await db.deleteVolunteer(vol.id);
+      setVolunteers(p=>p.filter(v=>v.id!==vol.id));
+      if(vol.email)pushVolNotif(vol.email,{type:"rejected",message:"❌ Your application was not approved this time.",volName:vol.name});
+      sendAlert(vol,"rejected");
+    }catch(e){alert(e.message);}
+    setBusy(false);
+  }
+  async function remove(vol){
+    if(!window.confirm(`Remove ${vol.name} permanently?`))return;setBusy(true);
+    try{await db.deleteVolunteer(vol.id);setVolunteers(p=>p.filter(v=>v.id!==vol.id));}
+    catch(e){alert(e.message);}
+    setBusy(false);
+  }
+  function broadcast(){
+    if(!bcast.trim())return;
+    approved.forEach(v=>{sendAlert(v,"broadcast",{message:bcast});if(v.email)pushVolNotif(v.email,{type:"broadcast",message:`📢 Admin: ${bcast}`,volName:v.name});});
+    playSound("sos");setBcast("");alert(`Broadcast sent to ${approved.length} volunteer(s).`);
+  }
+  const tabs=[
+    {k:"alerts",l:`🔔 Alerts${badge>0?` (${badge})`:""}`},
+    {k:"pending",l:`⏳ Pending (${pending.length})`},
+    {k:"approved",l:`✅ Approved (${approved.length})`},
+    {k:"contacts",l:"📞 Contacts"},
+    {k:"guide",l:"🩺 Guide"},
+    {k:"broadcast",l:"📢 Broadcast"},
+  ];
+  return(
+    <div style={S.screen}>
+      <div style={S.sHead}>🛡 Admin Dashboard</div>
+      {busy&&<div style={{...S.card(),background:"#1a1400",border:`1px solid ${C.gold}`,marginBottom:10,textAlign:"center"}}><p style={{color:C.gold,fontSize:12,margin:0}}>⏳ Saving to Supabase...</p></div>}
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+        {tabs.map(({k,l})=><button key={k} style={{...S.btnSm(tab===k?C.gold:C.navyLight,tab===k?C.navy:C.white),border:`1px solid ${tab===k?C.gold:C.navyLight}`,marginBottom:4}} onClick={()=>setTab(k)}>{l}</button>)}
+      </div>
+      {tab==="alerts"&&<AdminAlerts/>}
+      {tab==="contacts"&&<ContactsScreen canEdit setScreen={()=>{}}/>}
+      {tab==="guide"&&<GuideScreen setScreen={()=>{}} lang={lang} canEdit/>}
+      {tab==="broadcast"&&(
+        <div style={S.card()}>
+          <span style={S.label}>Broadcast Message</span>
+          <textarea style={{...S.input,minHeight:80,resize:"vertical",fontFamily:"inherit"}} value={bcast} onChange={e=>setBcast(e.target.value)} placeholder="e.g. Campus emergency drill at 3 PM today."/>
+          <button style={S.btn(C.gold,C.navy)} onClick={broadcast}>📢 Send to All Approved Volunteers</button>
+        </div>
+      )}
+      {(tab==="pending"||tab==="approved")&&(
+        <>
+          {(tab==="pending"?pending:approved).length===0&&<div style={{...S.card(),textAlign:"center",padding:28}}><p style={{color:C.gray,fontSize:13}}>No {tab} volunteers.</p></div>}
+          {(tab==="pending"?pending:approved).map(vol=>(
+            <div key={vol.id} style={S.card()}>
+              <div style={{...S.row,marginBottom:8}}>
+                <div style={{width:36,height:36,borderRadius:"50%",background:vol.approved?C.gold:C.gray,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:14,color:C.navy,flexShrink:0}}>{vol.name?.charAt(0)}</div>
+                <div style={{flex:1}}><p style={{fontSize:14,fontWeight:700,color:C.white,margin:0}}>{vol.name}</p><p style={{fontSize:11,color:C.gray,margin:0}}>{vol.department||vol.occupation||"—"}{vol.year?` · ${vol.year}`:""}</p></div>
+                {vol.approved&&<span style={S.badge(vol.online)}>{vol.online?"Online":"Offline"}</span>}
+              </div>
+              <div style={{fontSize:11,color:C.gray,marginBottom:8,lineHeight:1.8}}>
+                {vol.roll&&<p style={{margin:0}}>🎓 {vol.roll}</p>}
+                <p style={{margin:0}}>📧 {vol.email}</p>
+                <p style={{margin:0}}>📞 {vol.phone}</p>
+                <p style={{margin:0}}>🏅 Certified: {vol.first_aid_certified?"Yes ✅":"No ❌"}</p>
+                {vol.remarks&&<p style={{margin:0}}>📋 {vol.remarks}</p>}
+                {vol.lat&&<p style={{margin:0,fontFamily:"monospace",fontSize:10}}>📍 {fmtCoord(vol.lat)}, {fmtCoord(vol.lng)}</p>}
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                {!vol.approved&&<button style={{...S.btnSm(C.green,C.white),flex:1,padding:"10px"}} onClick={()=>approve(vol)} disabled={busy}>✓ Approve</button>}
+                <button style={{...S.btnSm(C.red,C.white),flex:1,padding:"10px"}} onClick={()=>vol.approved?remove(vol):reject(vol)} disabled={busy}>{vol.approved?"🗑 Remove":"✗ Reject"}</button>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── ROOT APP ───
+export default function App(){
+  const[lang,setLang]=useState(()=>{try{return localStorage.getItem("aga_lang")||"ta";}catch{return"ta";}});
+  const toggleLang=()=>{const n=lang==="ta"?"en":"ta";setLang(n);try{localStorage.setItem("aga_lang",n);}catch{}};
+  const[step,setStep]=useState("location");
+  const[screen,setScreen]=useState("home");
+  const[userLoc,setUserLoc]=useState(null);
+  const[userPhone,setUserPhone]=useState(()=>loadUserPhone());
+  const[selectedVol,setSelectedVol]=useState(null);
+  const[toast,setToast]=useState(null);
+  const[badge,setBadge]=useState(0);
+  const[session,setSession]=useState(loadSession);
+  const[volunteers,setVolunteers]=useState([]);
+  const[sosToday,setSosToday]=useState(0);
+  const volIdRef=useRef(null);
+
+  const refreshVols=useCallback(()=>{db.getVolunteers().then(d=>setVolunteers(d)).catch(()=>{});},[]);
+
+  useEffect(()=>{if(step==="app"){refreshVols();const t=setInterval(refreshVols,30000);return()=>clearInterval(t);}},[step,refreshVols]);
+
+  // Live user GPS
+  useEffect(()=>{
+    if(step!=="app"||!navigator.geolocation)return;
+    const id=navigator.geolocation.watchPosition(p=>setUserLoc({lat:p.coords.latitude,lng:p.coords.longitude}),null,{enableHighAccuracy:true,maximumAge:30000});
+    return()=>navigator.geolocation.clearWatch(id);
+  },[step]);
+
+  // Approved volunteer GPS → Supabase every 30s
+  useEffect(()=>{
+    if(!session?.email||step!=="app"||!navigator.geolocation)return;
+    const vol=volunteers.find(v=>v.email===session.email&&v.approved);
+    if(!vol)return;
+    volIdRef.current=vol.id;
+    const wid=navigator.geolocation.watchPosition(
+      pos=>{
+        const lat=pos.coords.latitude,lng=pos.coords.longitude;
+        db.updateVolunteer(volIdRef.current,{lat,lng,online:true,loc_updated_at:new Date().toISOString()}).catch(()=>{});
+        setVolunteers(p=>p.map(x=>x.id===volIdRef.current?{...x,lat,lng,loc_updated_at:new Date().toISOString()}:x));
+      },
+      null,{enableHighAccuracy:true,maximumAge:30000}
+    );
+    return()=>navigator.geolocation.clearWatch(wid);
+  },[session?.email,volunteers.length,step]);
+
+  useEffect(()=>subAlerts(alerts=>{
+    setBadge(alerts.filter(a=>!a.read).length);
+    const l=alerts[0];
+    if(l){setToast(l);setTimeout(()=>setToast(null),4500);}
+  }),[]);
+
+  function onLocation(loc){setUserLoc(loc);if(userPhone){setStep("app");}else{setStep("phone");}}
+  function onPhone(phone){setUserPhone(phone);saveUserPhone(phone);setStep("app");}
+
+  function triggerSOS(){
+    const nearby=volunteers.filter(v=>v.approved&&v.online&&v.availability).map(v=>({...v,distance:userLoc&&v.lat?haversine(userLoc.lat,userLoc.lng,parseFloat(v.lat),parseFloat(v.lng)):9999})).filter(v=>v.distance<=CAMPUS_RADIUS_KM*1000).sort((a,b)=>a.distance-b.distance);
+    if(!nearby.length){alert("No volunteers nearby. Please call Emergency Contacts directly.");setScreen("contacts");return;}
+    nearby.forEach(v=>{
+      sendAlert(v,"sos",{userLoc,userPhone});
+      if(v.email)pushVolNotif(v.email,{type:"sos",message:`🚨 SOS nearby! Caller: ${userPhone} · Location: ${fmtCoord(userLoc?.lat)}, ${fmtCoord(userLoc?.lng)}`,volName:v.name,userLoc,userPhone});
+    });
+    playSound("sos");setSosToday(c=>c+1);
+    alert(`🚨 SOS sent to ${nearby.length} volunteer(s)!\nYour phone number (${userPhone}) has been shared with them.`);
+  }
+
+  // ─── GATES ───
+  if(step==="location")return<LocationGate onEnable={onLocation} lang={lang} onToggle={toggleLang}/>;
+  if(step==="phone")return(
+    <div style={{...S.app,display:"flex",flexDirection:"column"}}>
+      <Header lang={lang} onToggle={toggleLang}/>
+      <PhoneGate onSave={onPhone} lang={lang}/>
+    </div>
+  );
+
+  const myNotifCount=session?.email?getVolNotifs(session.email).filter(n=>!n.read).length:0;
+  const navItems=[
+    {id:"home",icon:"🏠",label:lang==="ta"?"முகப்பு":"Home"},
+    {id:"volunteers",icon:"🆘",label:lang==="ta"?"தன்னார்வலர்":"Volunteers"},
+    {id:"guide",icon:"🩺",label:lang==="ta"?"முதலுதவி":"First Aid"},
+    {id:"myAlerts",icon:"🔔",label:lang==="ta"?"விழிப்பூட்டல்":"Alerts",badge:myNotifCount},
+    {id:"admin",icon:"🛡",label:lang==="ta"?"நிர்வாகி":"Admin",badge},
+  ];
+
+  const screens={
+    home:<HomeScreen userLoc={userLoc} setScreen={setScreen} lang={lang} onSOS={triggerSOS} volunteers={volunteers} sosToday={sosToday}/>,
+    volunteers:<VolunteersScreen userLoc={userLoc} setScreen={setScreen} setSelectedVol={setSelectedVol} volunteers={volunteers}/>,
+    map:<MapScreen userLoc={userLoc} selectedVol={selectedVol} setScreen={setScreen}/>,
+    campusMap:<CampusMapScreen setScreen={setScreen}/>,
+    contacts:<ContactsScreen setScreen={setScreen}/>,
+    guide:<GuideScreen setScreen={setScreen} lang={lang}/>,
+    myAlerts:<MyAlertsScreen session={session} lang={lang}/>,
+    login:<LoginScreen onLoggedIn={p=>{setSession(p);setScreen(p.registered?"profile":"register");}} setScreen={setScreen}/>,
+    profile:<ProfileScreen session={session} setScreen={setScreen} volunteers={volunteers} setVolunteers={setVolunteers} onSessionUpdate={setSession} lang={lang}/>,
+    register:session?<RegisterScreen setScreen={setScreen} session={session} onRegistered={p=>{setSession(p);refreshVols();}} userLoc={userLoc} lang={lang}/>:<LoginScreen onLoggedIn={p=>{setSession(p);setScreen("register");}} setScreen={setScreen}/>,
+    admin:<AdminScreen volunteers={volunteers} setVolunteers={setVolunteers} sosToday={sosToday} lang={lang}/>,
+  };
+
+  return(
+    <div style={S.app}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');@keyframes sd{from{opacity:0;transform:translateX(-50%) translateY(-14px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}*{-webkit-tap-highlight-color:transparent;box-sizing:border-box;}input::placeholder,textarea::placeholder{color:#475569;}input:focus,textarea:focus{border-color:#D4A017!important;box-shadow:0 0 0 2px rgba(212,160,23,0.15);}button:active{transform:scale(0.97);}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:#1A3058;border-radius:4px}`}</style>
+      {toast&&(
+        <div style={{position:"fixed",top:85,left:"50%",transform:"translateX(-50%)",zIndex:999,width:"90%",maxWidth:390,background:(toast.type==="call"||toast.type==="sos")?"#7f1d1d":"#1a1400",border:`2px solid ${(toast.type==="call"||toast.type==="sos")?C.red:C.gold}`,borderRadius:12,padding:"11px 14px",display:"flex",alignItems:"center",gap:10,animation:"sd 0.3s ease",boxShadow:"0 8px 32px rgba(0,0,0,0.5)"}}>
+          <span style={{fontSize:20}}>{toast.type==="sos"?"🆘":toast.type==="call"?"🚨":toast.type==="approved"?"✅":toast.type==="registered"?"📝":"📢"}</span>
+          <div style={{flex:1}}><p style={{fontWeight:800,fontSize:10,color:C.gold,margin:"0 0 2px",textTransform:"uppercase"}}>Alert</p><p style={{color:C.white,fontSize:12,margin:0}}>{toast.message}</p></div>
+          <button onClick={()=>setToast(null)} style={{background:"none",border:"none",color:C.gray,fontSize:16,cursor:"pointer",padding:0}}>✕</button>
+        </div>
+      )}
+      <Header lang={lang} onToggle={toggleLang}/>
+      <LocationBanner userLoc={userLoc} lang={lang}/>
+      <div>{screens[screen]||screens.home}</div>
+      <nav style={S.navBar}>
+        {navItems.map(n=>(
+          <button key={n.id} style={S.navBtn(screen===n.id||(screen==="map"&&n.id==="volunteers"))} onClick={()=>setScreen(n.id)}>
+            <span style={{fontSize:19,position:"relative",display:"inline-block"}}>
+              {n.icon}
+              {n.badge>0&&<span style={{position:"absolute",top:-3,right:-5,background:C.red,color:C.white,borderRadius:"50%",fontSize:8,fontWeight:800,width:12,height:12,display:"flex",alignItems:"center",justifyContent:"center"}}>{n.badge}</span>}
+            </span>
+            {n.label}
+          </button>
+        ))}
+      </nav>
+    </div>
+  );
+}
